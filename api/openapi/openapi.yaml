@@ -1,0 +1,1469 @@
+openapi: 3.1.0
+info:
+  title: Kronos Control Plane API
+  version: 0.1.0
+  description: >
+    Local/no-token mode accepts requests without Authorization. When a bearer
+    token is provided, endpoints enforce exact scopes plus resource:*,
+    admin:*, or *.
+servers:
+  - url: http://127.0.0.1:8500
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Server health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      responses:
+        "200":
+          description: Text exposition metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+  /api/v1/agents:
+    get:
+      summary: List agents
+      responses:
+        "200":
+          description: Known agent snapshots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentsResponse"
+  /api/v1/agents/{id}:
+    get:
+      summary: Get agent
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Agent snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSnapshot"
+        "404":
+          description: Agent not found
+  /api/v1/agents/heartbeat:
+    post:
+      summary: Record agent heartbeat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentHeartbeat"
+      responses:
+        "200":
+          description: Updated agent snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSnapshot"
+  /api/v1/audit:
+    get:
+      summary: List audit events
+      parameters:
+        - name: actor_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: resource_type
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: resource_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: since
+          in: query
+          required: false
+          description: RFC3339 timestamp or relative duration such as 7d or 24h.
+          schema:
+            type: string
+        - name: until
+          in: query
+          required: false
+          description: RFC3339 timestamp or relative duration such as 7d or 24h.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Audit event list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEventsResponse"
+  /api/v1/audit/verify:
+    post:
+      summary: Verify audit hash chain
+      responses:
+        "200":
+          description: Audit chain is valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OKResponse"
+        "409":
+          description: Audit chain verification failed
+  /api/v1/auth/verify:
+    post:
+      summary: Verify bearer API token
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Token is valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthVerifyResponse"
+        "401":
+          description: Bearer token is missing or invalid
+  /api/v1/tokens:
+    get:
+      summary: List API tokens
+      responses:
+        "200":
+          description: Token metadata list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokensResponse"
+    post:
+      summary: Create API token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTokenRequest"
+      responses:
+        "200":
+          description: Created token metadata and copy-once bearer secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedTokenResponse"
+        "400":
+          description: Invalid token request
+  /api/v1/tokens/{id}:
+    get:
+      summary: Get API token
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Token metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+        "404":
+          description: Token not found
+  /api/v1/tokens/{id}/revoke:
+    post:
+      summary: Revoke API token
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Revoked token metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+        "404":
+          description: Token not found
+  /api/v1/users:
+    get:
+      summary: List users
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsersResponse"
+    post:
+      summary: Create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/User"
+      responses:
+        "200":
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Invalid user
+  /api/v1/users/{id}:
+    get:
+      summary: Get user
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: User not found
+    delete:
+      summary: Delete user
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Deleted
+  /api/v1/users/{id}/grant:
+    post:
+      summary: Grant user role
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [admin, operator, viewer]
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: User not found
+  /api/v1/jobs:
+    get:
+      summary: List jobs
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [queued, running, finalizing, succeeded, failed, canceled]
+        - name: operation
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [backup, restore]
+        - name: target_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: storage_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: agent_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: since
+          in: query
+          required: false
+          description: RFC3339 timestamp or relative duration such as 7d or 24h.
+          schema:
+            type: string
+        - name: until
+          in: query
+          required: false
+          description: RFC3339 timestamp or relative duration such as 7d or 24h.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobsResponse"
+  /api/v1/jobs/claim:
+    post:
+      summary: Claim the oldest queued job
+      responses:
+        "200":
+          description: Claimed running job, or empty object when none are queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimJobResponse"
+  /api/v1/jobs/{id}/finish:
+    post:
+      summary: Finish a job and optionally capture backup metadata
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinishJobRequest"
+      responses:
+        "200":
+          description: Finished job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "400":
+          description: Invalid terminal status or backup metadata
+        "404":
+          description: Job not found
+  /api/v1/jobs/{id}:
+    get:
+      summary: Inspect a job
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Job metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          description: Job not found
+  /api/v1/jobs/{id}/cancel:
+    post:
+      summary: Cancel a queued or running job
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Canceled job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          description: Job not found
+  /api/v1/jobs/{id}/retry:
+    post:
+      summary: Requeue a failed or canceled job
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Requeued job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "400":
+          description: Job is not failed or canceled
+        "404":
+          description: Job not found
+  /api/v1/scheduler/tick:
+    post:
+      summary: Evaluate schedules once and enqueue due jobs
+      responses:
+        "200":
+          description: Jobs enqueued by this tick
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobsResponse"
+        "503":
+          description: Scheduler stores are not configured
+  /api/v1/backups:
+    get:
+      summary: List backups
+      parameters:
+        - name: target_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: storage_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [full, incr, diff, stream, schema]
+        - name: since
+          in: query
+          required: false
+          description: RFC3339 timestamp or relative duration such as 7d or 24h.
+          schema:
+            type: string
+        - name: until
+          in: query
+          required: false
+          description: RFC3339 timestamp or relative duration such as 7d or 24h.
+          schema:
+            type: string
+        - name: protected
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Backup list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupsResponse"
+  /api/v1/backups/now:
+    post:
+      summary: Enqueue an immediate backup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackupNowRequest"
+      responses:
+        "200":
+          description: Queued job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+  /api/v1/backups/{id}:
+    get:
+      summary: Inspect a backup
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Backup metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backup"
+        "404":
+          description: Backup not found
+  /api/v1/backups/{id}/protect:
+    post:
+      summary: Enable manual protection
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Updated backup metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backup"
+  /api/v1/backups/{id}/unprotect:
+    post:
+      summary: Disable manual protection
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Updated backup metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backup"
+  /api/v1/retention/plan:
+    post:
+      summary: Preview retention decisions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetentionPlanRequest"
+      responses:
+        "200":
+          description: Retention plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetentionPlan"
+  /api/v1/retention/apply:
+    post:
+      summary: Apply retention decisions to backup metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetentionApplyRequest"
+      responses:
+        "200":
+          description: Retention plan plus deleted backup IDs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetentionApplyResponse"
+  /api/v1/retention/policies:
+    get:
+      summary: List retention policies
+      responses:
+        "200":
+          description: Retention policy list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetentionPoliciesResponse"
+    post:
+      summary: Create retention policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetentionPolicy"
+      responses:
+        "200":
+          description: Created retention policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetentionPolicy"
+  /api/v1/retention/policies/{id}:
+    get:
+      summary: Get retention policy
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Retention policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetentionPolicy"
+        "404":
+          description: Retention policy not found
+    put:
+      summary: Update retention policy
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetentionPolicy"
+      responses:
+        "200":
+          description: Updated retention policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetentionPolicy"
+        "404":
+          description: Retention policy not found
+    delete:
+      summary: Delete retention policy
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Deleted
+  /api/v1/restore:
+    post:
+      summary: Enqueue a restore job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestoreStartRequest"
+      responses:
+        "200":
+          description: Queued restore job and restore plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestoreStartResponse"
+        "400":
+          description: Invalid backup chain or request
+        "404":
+          description: Backup not found
+  /api/v1/restore/preview:
+    post:
+      summary: Preview restore chain and target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestorePreviewRequest"
+      responses:
+        "200":
+          description: Restore plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestorePlan"
+        "400":
+          description: Invalid backup chain or request
+        "404":
+          description: Backup not found
+  /api/v1/targets:
+    get:
+      summary: List targets
+      parameters:
+        - $ref: "#/components/parameters/IncludeSecrets"
+      description: >
+        Returns redacted option values by default. `include_secrets=true`
+        requires `agent:write` in addition to `target:read`.
+      responses:
+        "200":
+          description: Target list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TargetsResponse"
+    post:
+      summary: Create target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Target"
+      responses:
+        "200":
+          description: Created target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Target"
+  /api/v1/targets/{id}:
+    get:
+      summary: Get target
+      parameters:
+        - $ref: "#/components/parameters/ID"
+        - $ref: "#/components/parameters/IncludeSecrets"
+      description: >
+        Returns redacted option values by default. `include_secrets=true`
+        requires `agent:write` in addition to `target:read`.
+      responses:
+        "200":
+          description: Target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Target"
+    put:
+      summary: Update target
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Target"
+      responses:
+        "200":
+          description: Updated target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Target"
+    delete:
+      summary: Delete target
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Deleted
+  /api/v1/storages:
+    get:
+      summary: List storages
+      parameters:
+        - $ref: "#/components/parameters/IncludeSecrets"
+      description: >
+        Returns redacted option values by default. `include_secrets=true`
+        requires `agent:write` in addition to `storage:read`.
+      responses:
+        "200":
+          description: Storage list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoragesResponse"
+    post:
+      summary: Create storage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Storage"
+      responses:
+        "200":
+          description: Created storage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Storage"
+  /api/v1/storages/{id}:
+    get:
+      summary: Get storage
+      parameters:
+        - $ref: "#/components/parameters/ID"
+        - $ref: "#/components/parameters/IncludeSecrets"
+      description: >
+        Returns redacted option values by default. `include_secrets=true`
+        requires `agent:write` in addition to `storage:read`.
+      responses:
+        "200":
+          description: Storage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Storage"
+    put:
+      summary: Update storage
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Storage"
+      responses:
+        "200":
+          description: Updated storage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Storage"
+    delete:
+      summary: Delete storage
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Deleted
+  /api/v1/schedules:
+    get:
+      summary: List schedules
+      responses:
+        "200":
+          description: Schedule list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulesResponse"
+    post:
+      summary: Create schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Schedule"
+      responses:
+        "200":
+          description: Created schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+  /api/v1/schedules/{id}:
+    get:
+      summary: Get schedule
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+    put:
+      summary: Update schedule
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Schedule"
+      responses:
+        "200":
+          description: Updated schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+    delete:
+      summary: Delete schedule
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Deleted
+  /api/v1/schedules/{id}/pause:
+    post:
+      summary: Pause schedule
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Paused schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+  /api/v1/schedules/{id}/resume:
+    post:
+      summary: Resume schedule
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Resumed schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    IncludeSecrets:
+      name: include_secrets
+      in: query
+      required: false
+      description: Include unredacted option values for agent resource sync.
+      schema:
+        type: boolean
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+        projects:
+          type: integer
+    OKResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+    AgentSnapshot:
+      type: object
+      required: [id, last_heartbeat, status]
+      properties:
+        id:
+          type: string
+        version:
+          type: string
+        address:
+          type: string
+        capacity:
+          type: integer
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        last_heartbeat:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [healthy, degraded]
+    AgentsResponse:
+      type: object
+      required: [agents]
+      properties:
+        agents:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentSnapshot"
+    AuditEvent:
+      type: object
+      required: [seq, id, action, resource_type, occurred_at, hash]
+      properties:
+        seq:
+          type: integer
+        id:
+          type: string
+        actor_id:
+          type: string
+        action:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        occurred_at:
+          type: string
+          format: date-time
+        prev_hash:
+          type: string
+        hash:
+          type: string
+    AuditEventsResponse:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+    AuthVerifyResponse:
+      type: object
+      required: [token]
+      properties:
+        token:
+          $ref: "#/components/schemas/Token"
+    TokensResponse:
+      type: object
+      required: [tokens]
+      properties:
+        tokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/Token"
+    CreatedTokenResponse:
+      type: object
+      required: [token, secret]
+      properties:
+        token:
+          $ref: "#/components/schemas/Token"
+        secret:
+          type: string
+          description: Copy-once bearer secret. This value is never returned by list or inspect endpoints.
+    UsersResponse:
+      type: object
+      required: [users]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+    JobsResponse:
+      type: object
+      required: [jobs]
+      properties:
+        jobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+    ClaimJobResponse:
+      type: object
+      properties:
+        job:
+          $ref: "#/components/schemas/Job"
+    BackupsResponse:
+      type: object
+      required: [backups]
+      properties:
+        backups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Backup"
+    RetentionPoliciesResponse:
+      type: object
+      required: [policies]
+      properties:
+        policies:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetentionPolicy"
+    TargetsResponse:
+      type: object
+      required: [targets]
+      properties:
+        targets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Target"
+    StoragesResponse:
+      type: object
+      required: [storages]
+      properties:
+        storages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Storage"
+    SchedulesResponse:
+      type: object
+      required: [schedules]
+      properties:
+        schedules:
+          type: array
+          items:
+            $ref: "#/components/schemas/Schedule"
+    AgentHeartbeat:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        version:
+          type: string
+        address:
+          type: string
+        capacity:
+          type: integer
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+    BackupNowRequest:
+      type: object
+      required: [target_id, storage_id]
+      properties:
+        target_id:
+          type: string
+        storage_id:
+          type: string
+        type:
+          type: string
+          enum: [full, incr, diff, stream, schema]
+        parent_id:
+          type: string
+          description: Parent backup id for incremental or differential backups.
+    FinishJobRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [succeeded, failed, canceled]
+        error:
+          type: string
+        backup:
+          $ref: "#/components/schemas/Backup"
+    CreateTokenRequest:
+      type: object
+      required: [name, user_id, scopes]
+      properties:
+        name:
+          type: string
+        user_id:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+    Token:
+      type: object
+      required: [id, user_id, name, scopes, created_at]
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        name:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+    User:
+      type: object
+      required: [email, display_name, role]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+        totp_enforced:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Target:
+      type: object
+      required: [id, name, driver, endpoint]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        driver:
+          type: string
+          enum: [postgres, mysql, mongodb, redis]
+        endpoint:
+          type: string
+        database:
+          type: string
+        options:
+          type: object
+          additionalProperties: true
+          description: Secret-like keys are redacted unless include_secrets=true is authorized.
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Storage:
+      type: object
+      required: [id, name, kind, uri]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [local, s3, sftp, azure, gcs]
+        uri:
+          type: string
+        options:
+          type: object
+          additionalProperties: true
+          description: Secret-like keys are redacted unless include_secrets=true is authorized.
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Schedule:
+      type: object
+      required: [id, name, target_id, storage_id, backup_type, expression, paused, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        target_id:
+          type: string
+        storage_id:
+          type: string
+        backup_type:
+          type: string
+          enum: [full, incr, diff, stream, schema]
+        expression:
+          type: string
+        retention_policy_id:
+          type: string
+        paused:
+          type: boolean
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Backup:
+      type: object
+      required: [id, manifest_id]
+      properties:
+        id:
+          type: string
+        target_id:
+          type: string
+        storage_id:
+          type: string
+        job_id:
+          type: string
+        type:
+          type: string
+        parent_id:
+          type: string
+        manifest_id:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+        size_bytes:
+          type: integer
+        chunk_count:
+          type: integer
+        protected:
+          type: boolean
+    RestorePreviewRequest:
+      type: object
+      required: [backup_id]
+      properties:
+        backup_id:
+          type: string
+        target_id:
+          type: string
+        at:
+          type: string
+          format: date-time
+    RestoreStartRequest:
+      allOf:
+        - $ref: "#/components/schemas/RestorePreviewRequest"
+        - type: object
+          properties:
+            dry_run:
+              type: boolean
+            replace_existing:
+              type: boolean
+    Job:
+      type: object
+      required: [id, status, queued_at]
+      properties:
+        id:
+          type: string
+        operation:
+          type: string
+          enum: [backup, restore]
+        schedule_id:
+          type: string
+        target_id:
+          type: string
+        storage_id:
+          type: string
+        type:
+          type: string
+          enum: [full, incr, diff, stream, schema]
+        agent_id:
+          type: string
+        parent_backup_id:
+          type: string
+        restore_backup_id:
+          type: string
+        restore_manifest_id:
+          type: string
+        restore_manifest_ids:
+          type: array
+          items:
+            type: string
+        restore_target_id:
+          type: string
+        restore_at:
+          type: string
+          format: date-time
+        restore_dry_run:
+          type: boolean
+        restore_replace_existing:
+          type: boolean
+        status:
+          type: string
+          enum: [queued, running, finalizing, succeeded, failed, canceled]
+        queued_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+        error:
+          type: string
+    RestoreStartResponse:
+      type: object
+      required: [job, plan]
+      properties:
+        job:
+          $ref: "#/components/schemas/Job"
+        plan:
+          $ref: "#/components/schemas/RestorePlan"
+    RestorePlan:
+      type: object
+      required: [backup_id, target_id, storage_id, steps]
+      properties:
+        backup_id:
+          type: string
+        target_id:
+          type: string
+        storage_id:
+          type: string
+        at:
+          type: string
+          format: date-time
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              backup_id:
+                type: string
+              type:
+                type: string
+              parent_id:
+                type: string
+              manifest_id:
+                type: string
+              target_id:
+                type: string
+              storage_id:
+                type: string
+              started_at:
+                type: string
+                format: date-time
+              ended_at:
+                type: string
+                format: date-time
+        warnings:
+          type: array
+          items:
+            type: string
+    RetentionRule:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [count, time, size, gfs]
+        params:
+          type: object
+          additionalProperties: true
+    RetentionPolicy:
+      type: object
+      required: [id, name, rules, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetentionRule"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    RetentionPlanItem:
+      type: object
+      required: [backup, keep]
+      properties:
+        backup:
+          $ref: "#/components/schemas/Backup"
+        keep:
+          type: boolean
+        reasons:
+          type: array
+          items:
+            type: string
+    RetentionPlan:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetentionPlanItem"
+    RetentionApplyResponse:
+      type: object
+      required: [plan, deleted, dry_run]
+      properties:
+        plan:
+          $ref: "#/components/schemas/RetentionPlan"
+        deleted:
+          type: array
+          items:
+            type: string
+        dry_run:
+          type: boolean
+    RetentionPlanRequest:
+      type: object
+      required: [policy]
+      properties:
+        policy:
+          $ref: "#/components/schemas/RetentionPolicy"
+        now:
+          type: string
+          format: date-time
+    RetentionApplyRequest:
+      allOf:
+        - $ref: "#/components/schemas/RetentionPlanRequest"
+        - type: object
+          properties:
+            dry_run:
+              type: boolean

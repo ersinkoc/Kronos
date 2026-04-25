@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Kronos">
+  <rect width="64" height="64" rx="12" fill="#0B0B12"/>
+  <path d="M18 12h28M18 52h28M22 16c0 9 8 10 10 16-2 6-10 7-10 16M42 16c0 9-8 10-10 16 2 6 10 7 10 16" fill="none" stroke="#B87333" stroke-width="4" stroke-linecap="round"/>
+  <path d="M27 25h10l-5 5-5-5ZM25 43h14l-7-8-7 8Z" fill="#D4A963"/>
+</svg>

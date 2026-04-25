@@ -1,0 +1,42 @@
+server:
+  listen: "127.0.0.1:8500"
+  listen_webui: "127.0.0.1:8500"
+  data_dir: "/tmp/kronos"
+  auth:
+    oidc:
+      issuer: "https://id.example.com"
+      client_id: "kronos"
+      client_secret: "${env:KRONOS_TEST_OIDC_SECRET}"
+  master_passphrase: "${file:master_passphrase}"
+
+projects:
+  - name: default
+    storages:
+      - name: local-primary
+        backend: local
+        path: "/tmp/kronos-repo"
+        encryption_key: "age-key-${env:KRONOS_TEST_KEY_SUFFIX}"
+    targets:
+      - name: prod-postgres
+        driver: postgres
+        connection:
+          host: "127.0.0.1"
+          port: 5432
+          user: "kronos"
+          password: "${env:KRONOS_TEST_PG_PASSWORD}"
+          database: "app"
+          tls: require
+        agent: "agent-local"
+        tier: tier0
+    schedules:
+      - name: prod-pg-nightly
+        target: prod-postgres
+        type: full
+        cron: "0 2 * * *"
+        storage: local-primary
+        retention: gfs-standard
+        hooks:
+          pre_backup:
+            - shell: "/usr/local/bin/notify-ops start"
+          on_failure:
+            - webhook: "https://hooks.example.com/kronos"
