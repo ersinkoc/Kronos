@@ -154,6 +154,22 @@ healthy agent is available:
 4. Verify at least one backup from both repositories before retiring old
    storage.
 
+## Request Correlation
+
+Kronos echoes `X-Kronos-Request-ID` on control-plane responses and records it in
+audit metadata for mutations. When investigating an incident, provide a stable
+request ID from the CLI and use it when comparing CLI errors, server logs, and
+audit records:
+
+```bash
+./bin/kronos --request-id incident-20260426-001 --server http://127.0.0.1:8500 backup now --target <target-id> --storage <storage-id>
+./bin/kronos audit search --query incident-20260426-001
+```
+
+If `--request-id` is omitted, CLI and agent requests generate correlation IDs
+automatically. Failed CLI and agent control-plane requests include the response
+request ID in the error text when the server provides one.
+
 ## Disaster Recovery
 
 1. Start a clean control plane with the preserved state database and config:

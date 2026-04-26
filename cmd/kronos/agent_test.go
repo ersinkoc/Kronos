@@ -121,6 +121,24 @@ func TestRunAgentHeartbeatSendsBearerToken(t *testing.T) {
 	}
 }
 
+func TestPostHeartbeatGeneratesRequestID(t *testing.T) {
+	t.Parallel()
+
+	var gotRequestID string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRequestID = r.Header.Get(obs.RequestIDHeader)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	if err := postHeartbeat(context.Background(), server.Client(), server.URL, control.AgentHeartbeat{ID: "agent-1"}, ""); err != nil {
+		t.Fatalf("postHeartbeat() error = %v", err)
+	}
+	if gotRequestID == "" {
+		t.Fatalf("%s fallback is empty", obs.RequestIDHeader)
+	}
+}
+
 func TestRunAgentSendsCapacity(t *testing.T) {
 	t.Parallel()
 

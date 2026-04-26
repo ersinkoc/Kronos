@@ -234,9 +234,7 @@ func postHeartbeat(ctx context.Context, client *http.Client, endpoint string, he
 	if token = strings.TrimSpace(token); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	if requestID, ok := obs.RequestIDFromContext(ctx); ok {
-		req.Header.Set(obs.RequestIDHeader, requestID)
-	}
+	req.Header.Set(obs.RequestIDHeader, agentRequestID(ctx))
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -246,6 +244,13 @@ func postHeartbeat(ctx context.Context, client *http.Client, endpoint string, he
 		return fmt.Errorf("heartbeat failed: %s", resp.Status)
 	}
 	return nil
+}
+
+func agentRequestID(ctx context.Context) string {
+	if requestID, ok := obs.RequestIDFromContext(ctx); ok {
+		return requestID
+	}
+	return obs.NewRequestID()
 }
 
 func heartbeatEndpoint(serverAddr string) (string, error) {

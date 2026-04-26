@@ -1,14 +1,16 @@
 # Kronos CLI Reference
 
 Kronos ships as one binary with subcommands. All control-plane commands accept
-`--server`; pass global `--server`, `--token`, `--output json|pretty|yaml|table`, or
-`--no-color` before the command. `--token`, `--output`, and `--no-color` may
-also be placed with command flags, and `KRONOS_TOKEN` sends a bearer token when
+`--server`; pass global `--server`, `--token`,
+`--output json|pretty|yaml|table`, `--request-id`, or `--no-color` before the
+command. `--token`, `--output`, `--request-id`, and `--no-color` may also be
+placed with command flags, and `KRONOS_TOKEN` sends a bearer token when
 `--token` is omitted.
 The server keeps local/no-token mode open for development, but enforces token
 scopes when a bearer token is provided. Exact scopes, `resource:*`, `admin:*`,
 and `*` are accepted. Color is TTY-aware and can also be disabled with
-`NO_COLOR=1`.
+`NO_COLOR=1`. When `--request-id` is supplied, Kronos sends it as
+`X-Kronos-Request-ID`; otherwise CLI commands generate one automatically.
 
 ## Core
 
@@ -19,6 +21,7 @@ kronos version
 kronos keygen --key-id prod-2026
 kronos health
 kronos --server http://127.0.0.1:8500 --token "$KRONOS_TOKEN" --output pretty backup list
+kronos --request-id incident-20260426-001 backup list --server http://127.0.0.1:8500
 kronos config validate --config kronos.yaml
 kronos --output pretty config inspect --config kronos.yaml
 kronos server --config kronos.yaml

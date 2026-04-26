@@ -169,9 +169,9 @@ func TestClientSendsAgentIDHeader(t *testing.T) {
 func TestClientSendsRequestIDHeader(t *testing.T) {
 	t.Parallel()
 
-	var gotRequestID string
+	var gotRequestIDs []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotRequestID = r.Header.Get(obs.RequestIDHeader)
+		gotRequestIDs = append(gotRequestIDs, r.Header.Get(obs.RequestIDHeader))
 		writeTestJSON(t, w, control.AgentSnapshot{ID: "agent-1", Status: control.AgentHealthy})
 	}))
 	defer server.Close()
@@ -183,8 +183,17 @@ func TestClientSendsRequestIDHeader(t *testing.T) {
 	if _, err := client.Heartbeat(ctx, control.AgentHeartbeat{ID: "agent-1"}); err != nil {
 		t.Fatalf("Heartbeat() error = %v", err)
 	}
-	if gotRequestID != "req-agent-1" {
-		t.Fatalf("%s = %q, want req-agent-1", obs.RequestIDHeader, gotRequestID)
+	if _, err := client.Heartbeat(context.Background(), control.AgentHeartbeat{ID: "agent-1"}); err != nil {
+		t.Fatalf("Heartbeat(background) error = %v", err)
+	}
+	if len(gotRequestIDs) != 2 {
+		t.Fatalf("request ids = %#v, want 2 entries", gotRequestIDs)
+	}
+	if gotRequestIDs[0] != "req-agent-1" {
+		t.Fatalf("%s = %q, want req-agent-1", obs.RequestIDHeader, gotRequestIDs[0])
+	}
+	if gotRequestIDs[1] == "" {
+		t.Fatalf("%s fallback is empty", obs.RequestIDHeader)
 	}
 }
 

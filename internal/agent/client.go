@@ -166,9 +166,7 @@ func (c *Client) newRequest(ctx context.Context, method string, path string, bod
 	if agentID := strings.TrimSpace(c.AgentID); agentID != "" {
 		req.Header.Set("X-Kronos-Agent-ID", agentID)
 	}
-	if requestID, ok := obs.RequestIDFromContext(ctx); ok {
-		req.Header.Set(obs.RequestIDHeader, requestID)
-	}
+	req.Header.Set(obs.RequestIDHeader, requestIDForContext(ctx))
 	return req, nil
 }
 
@@ -196,6 +194,13 @@ func responseRequestID(resp *http.Response) string {
 		return " request_id=" + requestID
 	}
 	return ""
+}
+
+func requestIDForContext(ctx context.Context) string {
+	if requestID, ok := obs.RequestIDFromContext(ctx); ok {
+		return requestID
+	}
+	return obs.NewRequestID()
 }
 
 func responseBodySnippet(resp *http.Response) string {

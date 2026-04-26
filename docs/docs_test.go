@@ -39,6 +39,21 @@ func TestLocalMarkdownLinksResolve(t *testing.T) {
 	}
 }
 
+func TestCLIReferenceDocumentsRequestID(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile("cli.md")
+	if err != nil {
+		t.Fatalf("ReadFile(cli.md) error = %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{"--request-id", "X-Kronos-Request-ID"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("cli.md missing %q", want)
+		}
+	}
+}
+
 func markdownFiles(t *testing.T, root string) []string {
 	t.Helper()
 
