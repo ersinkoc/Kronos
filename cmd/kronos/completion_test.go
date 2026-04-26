@@ -15,7 +15,7 @@ func TestRunCompletionBash(t *testing.T) {
 		t.Fatalf("completion bash error = %v", err)
 	}
 	text := out.String()
-	for _, want := range []string{"complete -F _kronos_completion kronos", "backup", "restore", "user", "--no-color --output --request-id --server --token", "token) COMPREPLY", "inspect list revoke"} {
+	for _, want := range []string{"complete -F _kronos_completion kronos", "backup", "ready", "restore", "user", "--no-color --output --request-id --server --token", "token) COMPREPLY", "inspect list revoke"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("bash completion missing %q in %s", want, text)
 		}
@@ -30,7 +30,7 @@ func TestRunCompletionZsh(t *testing.T) {
 		t.Fatalf("completion zsh error = %v", err)
 	}
 	text := out.String()
-	if !strings.Contains(text, "#compdef kronos") || !strings.Contains(text, "'completion'") || !strings.Contains(text, "'--no-color' '--output' '--request-id' '--server' '--token'") || !strings.Contains(text, "token) subcommands=('create' 'inspect' 'list' 'revoke' 'verify')") {
+	if !strings.Contains(text, "#compdef kronos") || !strings.Contains(text, "'completion'") || !strings.Contains(text, "'ready'") || !strings.Contains(text, "'--no-color' '--output' '--request-id' '--server' '--token'") || !strings.Contains(text, "token) subcommands=('create' 'inspect' 'list' 'revoke' 'verify')") {
 		t.Fatalf("zsh completion output = %q", text)
 	}
 }
@@ -43,7 +43,7 @@ func TestRunCompletionFish(t *testing.T) {
 		t.Fatalf("completion fish error = %v", err)
 	}
 	text := out.String()
-	if !strings.Contains(text, "complete -c kronos") || !strings.Contains(text, "'token'") || !strings.Contains(text, "-l no-color") || !strings.Contains(text, "-l request-id") || !strings.Contains(text, "__fish_seen_subcommand_from 'agent'") || !strings.Contains(text, "'inspect list'") {
+	if !strings.Contains(text, "complete -c kronos") || !strings.Contains(text, "'ready'") || !strings.Contains(text, "'token'") || !strings.Contains(text, "-l no-color") || !strings.Contains(text, "-l request-id") || !strings.Contains(text, "__fish_seen_subcommand_from 'agent'") || !strings.Contains(text, "'inspect list'") {
 		t.Fatalf("fish completion output = %q", text)
 	}
 }
