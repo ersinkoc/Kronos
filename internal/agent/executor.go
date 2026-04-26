@@ -108,7 +108,7 @@ func OpenStorageBackend(item core.Storage) (storage.Backend, error) {
 		}
 		return s3.New(cfg)
 	default:
-		return nil, fmt.Errorf("storage kind %q is not supported by agent executor", item.Kind)
+		return nil, fmt.Errorf("storage kind %q is not implemented in this build; supported storage kinds: local, s3", item.Kind)
 	}
 }
 

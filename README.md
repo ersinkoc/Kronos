@@ -22,7 +22,9 @@ database backups. The product brief and build plan live in `.project/`:
 This repository currently has the Phase 0 foundation in place and active Phase
 1/early Phase 2 implementation work:
 
-- storage backends: local filesystem and S3-compatible object storage
+- storage backends: local filesystem and S3-compatible object storage; SFTP,
+  Azure Blob, and Google Cloud Storage are domain-level roadmap kinds, not
+  executable backends in this build
 - crypto/chunk core: FastCDC, BLAKE3 chunk IDs, compression, encryption
   envelopes, dedup index, backup/restore pipeline
 - repository metadata: signed manifests, manifest commit/load helpers, manifest

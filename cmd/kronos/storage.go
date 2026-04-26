@@ -276,14 +276,13 @@ func openStorageURI(rawURI string, kind string, options map[string]any) (storage
 		if err != nil {
 			return nil, err
 		}
-		switch parsed.Scheme {
-		case "file":
-			kind = string(core.StorageKindLocal)
-		case "s3":
-			kind = string(core.StorageKindS3)
-		default:
+		kind = inferStorageKind(parsed.Scheme)
+		if kind == "" {
 			return nil, fmt.Errorf("--kind is required for storage uri %q", rawURI)
 		}
+	}
+	if !storageKindImplemented(core.StorageKind(kind)) {
+		return nil, unsupportedStorageKindError(core.StorageKind(kind))
 	}
 	cleanOptions := make(map[string]any)
 	for key, value := range options {
@@ -308,6 +307,40 @@ func openStorageURI(rawURI string, kind string, options map[string]any) (storage
 		URI:     rawURI,
 		Options: cleanOptions,
 	})
+}
+
+func inferStorageKind(scheme string) string {
+	switch scheme {
+	case "file":
+		return string(core.StorageKindLocal)
+	case "s3":
+		return string(core.StorageKindS3)
+	case "sftp", "ssh":
+		return string(core.StorageKindSFTP)
+	case "azure", "azblob":
+		return string(core.StorageKindAzure)
+	case "gs", "gcs":
+		return string(core.StorageKindGCS)
+	default:
+		return ""
+	}
+}
+
+func storageKindImplemented(kind core.StorageKind) bool {
+	switch kind {
+	case core.StorageKindLocal, core.StorageKindS3:
+		return true
+	default:
+		return false
+	}
+}
+
+func unsupportedStorageKindError(kind core.StorageKind) error {
+	return fmt.Errorf("storage kind %q is not implemented in this build; supported storage kinds: %s", kind, strings.Join(supportedStorageKinds(), ", "))
+}
+
+func supportedStorageKinds() []string {
+	return []string{string(core.StorageKindLocal), string(core.StorageKindS3)}
 }
 
 func runStorageDU(ctx context.Context, out io.Writer, args []string) error {

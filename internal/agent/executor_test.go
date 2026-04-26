@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -329,6 +330,9 @@ func TestOpenStorageBackendRejectsUnsupportedKind(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("OpenStorageBackend() error = nil, want unsupported kind error")
+	}
+	if !strings.Contains(err.Error(), "not implemented") || !strings.Contains(err.Error(), "local, s3") {
+		t.Fatalf("OpenStorageBackend() error = %v, want implemented supported list", err)
 	}
 }
 

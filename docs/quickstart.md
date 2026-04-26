@@ -77,6 +77,10 @@ mkdir -p /tmp/kronos-repo
 ./bin/kronos storage test --uri file:///tmp/kronos-repo
 ```
 
+This build can execute local and S3-compatible repositories. Other domain-level
+storage kinds such as SFTP, Azure Blob, and Google Cloud Storage are still
+roadmap backends and fail fast with an explicit unsupported-kind error.
+
 Register a Redis target. Adjust the endpoint if Redis is elsewhere:
 
 ```bash

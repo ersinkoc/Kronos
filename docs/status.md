@@ -103,7 +103,8 @@ are:
 
 - Additional database drivers such as PostgreSQL, MySQL, and MongoDB.
 - Additional storage backends such as SFTP, Azure Blob, and Google Cloud
-  Storage.
+  Storage. Current executable backends are local filesystem and S3-compatible
+  object storage.
 - Deeper WebUI interaction against real API data beyond the current embedded
   dashboard shell.
 - Richer notification channels and hook execution surfaces from the product

@@ -274,6 +274,31 @@ func TestRunStorageTestRequiresFileURI(t *testing.T) {
 	}
 }
 
+func TestRunStorageTestRejectsUnimplementedKinds(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range [][]string{
+		{"storage", "test", "--uri", "sftp://example.com/repo"},
+		{"storage", "test", "--uri", "gs://bucket/repo"},
+		{"storage", "du", "--uri", "azure://account/container"},
+		{"storage", "test", "--kind", "azure", "--uri", "https://account.blob.core.windows.net/container"},
+	} {
+		args := args
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			t.Parallel()
+			var out bytes.Buffer
+			err := run(context.Background(), &out, args)
+			if err == nil {
+				t.Fatal("storage command error = nil, want unsupported kind error")
+			}
+			text := err.Error()
+			if !strings.Contains(text, "not implemented") || !strings.Contains(text, "supported storage kinds: local, s3") {
+				t.Fatalf("storage command error = %q", text)
+			}
+		})
+	}
+}
+
 func TestLocalStorageURIParsing(t *testing.T) {
 	t.Parallel()
 
