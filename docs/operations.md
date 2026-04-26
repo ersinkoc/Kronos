@@ -29,6 +29,8 @@ least one manifest can be verified:
 ./bin/kronos backup verify --manifest-key <manifest-key> --level manifest --public-key <public-key-hex> --storage-local <repo-path>
 ```
 
+For full rehearsal steps, use the [Restore Drills](restore-drills.md) checklist.
+
 For public or shared control planes, set token verification throttling in
 `kronos.yaml` to match your expected automation volume:
 
