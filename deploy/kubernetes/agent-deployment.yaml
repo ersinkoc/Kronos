@@ -27,6 +27,12 @@ spec:
         - name: kronos-agent
           image: ghcr.io/kronosbackup/kronos:latest
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           args:
             - agent
             - --work

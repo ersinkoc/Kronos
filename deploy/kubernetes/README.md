@@ -39,4 +39,6 @@ Before using this in production:
   safe backup concurrency.
 - Review the included NetworkPolicy and tighten allowed namespaces/pods for
   your cluster.
+- Keep the container security contexts unless your runtime requires a reviewed
+  exception.
 - Add TLS termination and RBAC appropriate for your cluster.
