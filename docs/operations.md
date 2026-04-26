@@ -156,14 +156,15 @@ groups:
 
    ```bash
    make test
-   make release
+   make release-all
    ./bin/kronos-$(go env GOOS)-$(go env GOARCH) version
    sha256sum -c ./bin/kronos-$(go env GOOS)-$(go env GOARCH).sha256
    ```
 
-   `make release` derives version metadata from Git by default. Set
+   `make release-all` derives version metadata from Git by default. Set
    `VERSION=<version> COMMIT=<commit> BUILD_DATE=<rfc3339>` when a release
-   pipeline needs exact stamped values.
+   pipeline needs exact stamped values. Set `RELEASE_TARGETS="linux/amd64"` to
+   restrict the target matrix.
 
 2. Drain new work by pausing schedules that should not run during the upgrade:
 

@@ -1,4 +1,4 @@
-.PHONY: help build test lint fmt vet vuln bench integration e2e ui release clean check
+.PHONY: help build test lint fmt vet vuln bench integration e2e ui release release-all clean check
 
 BIN := bin/kronos
 GO ?= go
@@ -26,6 +26,7 @@ help:
 		'  e2e          Run end-to-end tests' \
 		'  ui           Build the embedded WebUI' \
 		'  release      Build a stamped release binary and checksum' \
+		'  release-all  Build stamped release binaries and checksums for common platforms' \
 		'  clean        Remove generated artifacts' \
 		'  check        Run fmt check, vet, lint, vuln, tests, build, and script checks'
 
@@ -63,6 +64,9 @@ ui:
 release:
 	GO=$(GO) VERSION="$(VERSION)" COMMIT="$(COMMIT)" BUILD_DATE="$(BUILD_DATE)" ./scripts/build.sh
 
+release-all:
+	GO=$(GO) VERSION="$(VERSION)" COMMIT="$(COMMIT)" BUILD_DATE="$(BUILD_DATE)" ./scripts/release.sh
+
 clean:
 	rm -rf bin bench/bench.out
 
@@ -80,5 +84,6 @@ check:
 	fi
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/kronos
 	sh -n scripts/build.sh
+	sh -n scripts/release.sh
 	sh -n web/build.sh
 	$(BIN) completion bash | bash -n

@@ -108,7 +108,7 @@ are:
 2. Wire the WebUI to live API endpoints for dashboard state, jobs, backups, and
    agents.
 3. Add notification and hook primitives around job terminal events.
-4. Extend release automation from local stamped binaries/checksums to published
-   multi-platform artifacts.
+4. Extend release automation from local multi-platform binaries/checksums to
+   published artifacts.
 5. Extend operations docs with production deployment topologies and alert rule
    examples.

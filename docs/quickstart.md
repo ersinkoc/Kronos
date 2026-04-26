@@ -13,7 +13,8 @@ make build
 Build metadata is stamped from Git by default. Override `VERSION`, `COMMIT`, or
 `BUILD_DATE` if you need fixed release metadata.
 Use `make release` when you also want a platform-named artifact and `.sha256`
-checksum under `bin/`.
+checksum under `bin/`. Use `make release-all` for linux/darwin amd64/arm64
+artifacts.
 
 To embed the React WebUI into the binary, run `make ui` before `make build`.
 

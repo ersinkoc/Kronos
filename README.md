@@ -85,7 +85,8 @@ make build
 `make build` stamps version metadata from Git when available. Override
 `VERSION`, `COMMIT`, or `BUILD_DATE` for reproducible release builds.
 `make release` writes a platform-named binary and matching `.sha256` checksum
-under `bin/`.
+under `bin/`; `make release-all` writes linux/darwin amd64/arm64 artifacts by
+default.
 
 Build and embed the WebUI before producing a UI-enabled binary:
 
