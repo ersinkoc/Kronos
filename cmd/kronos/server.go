@@ -1730,9 +1730,28 @@ func handleRevokeToken(w http.ResponseWriter, r *http.Request, store *control.To
 	writeJSON(w, token)
 }
 
+type pruneTokensRequest struct {
+	DryRun bool `json:"dry_run"`
+}
+
 func handlePruneTokens(w http.ResponseWriter, r *http.Request, store *control.TokenStore, auditLog *kaudit.Log) {
 	if store == nil {
 		http.Error(w, "token store is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	defer r.Body.Close()
+	var request pruneTokensRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
+		http.Error(w, "invalid token prune request", http.StatusBadRequest)
+		return
+	}
+	if request.DryRun {
+		inactive, err := store.Inactive()
+		if err != nil {
+			http.Error(w, "list inactive tokens", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]any{"deleted": len(inactive), "dry_run": true, "tokens": inactive})
 		return
 	}
 	deleted, err := store.PruneInactive()
@@ -1743,7 +1762,7 @@ func handlePruneTokens(w http.ResponseWriter, r *http.Request, store *control.To
 	if handleAuditAppendError(w, appendAuditEvent(r, auditLog, "token.pruned", "token", "", map[string]any{"deleted": len(deleted)})) {
 		return
 	}
-	writeJSON(w, map[string]any{"deleted": len(deleted), "tokens": deleted})
+	writeJSON(w, map[string]any{"deleted": len(deleted), "dry_run": false, "tokens": deleted})
 }
 
 func validateTokenUserScopes(users *control.UserStore, userID core.ID, scopes []string) error {

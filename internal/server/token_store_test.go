@@ -121,6 +121,17 @@ func TestTokenStorePruneInactive(t *testing.T) {
 	}
 	clock.Advance(2 * time.Minute)
 
+	inactive, err := store.Inactive()
+	if err != nil {
+		t.Fatalf("Inactive() error = %v", err)
+	}
+	if len(inactive) != 2 {
+		t.Fatalf("inactive = %#v, want 2 tokens", inactive)
+	}
+	if _, ok, err := store.Get(expiring.Token.ID); err != nil || !ok {
+		t.Fatalf("Get(expiring before prune) ok=%v err=%v, want present", ok, err)
+	}
+
 	deleted, err := store.PruneInactive()
 	if err != nil {
 		t.Fatalf("PruneInactive() error = %v", err)

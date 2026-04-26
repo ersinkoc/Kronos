@@ -804,7 +804,23 @@ func TestServerTokenEndpoints(t *testing.T) {
 		t.Fatalf("revoke token body = %q", body.String())
 	}
 
-	resp, err = server.Client().Post(server.URL+"/api/v1/tokens/prune", "application/json", nil)
+	resp, err = server.Client().Post(server.URL+"/api/v1/tokens/prune", "application/json", strings.NewReader(`{"dry_run":true}`))
+	if err != nil {
+		t.Fatalf("POST token prune dry-run error = %v", err)
+	}
+	body.Reset()
+	if _, err := body.ReadFrom(resp.Body); err != nil {
+		t.Fatalf("ReadFrom(prune token dry-run) error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"deleted":1`) || !strings.Contains(body.String(), `"dry_run":true`) {
+		t.Fatalf("prune token dry-run status=%d body=%q", resp.StatusCode, body.String())
+	}
+	if tokens, err = stores.tokens.List(); err != nil || len(tokens) != 1 {
+		t.Fatalf("List(tokens after dry-run) tokens=%#v err=%v, want token retained", tokens, err)
+	}
+
+	resp, err = server.Client().Post(server.URL+"/api/v1/tokens/prune", "application/json", strings.NewReader(`{}`))
 	if err != nil {
 		t.Fatalf("POST token prune error = %v", err)
 	}

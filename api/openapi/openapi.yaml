@@ -255,6 +255,11 @@ paths:
   /api/v1/tokens/prune:
     post:
       summary: Prune revoked and expired API tokens
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PruneTokensRequest"
       responses:
         "200":
           description: Deleted token metadata
@@ -1075,14 +1080,21 @@ components:
           description: Copy-once bearer secret. This value is never returned by list or inspect endpoints.
     PruneTokensResponse:
       type: object
-      required: [deleted, tokens]
+      required: [deleted, dry_run, tokens]
       properties:
         deleted:
           type: integer
+        dry_run:
+          type: boolean
         tokens:
           type: array
           items:
             $ref: "#/components/schemas/Token"
+    PruneTokensRequest:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
     UsersResponse:
       type: object
       required: [users]

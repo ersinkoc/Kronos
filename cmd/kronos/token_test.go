@@ -45,8 +45,16 @@ func TestRunTokenCreateListInspectRevoke(t *testing.T) {
 			if r.Method != http.MethodPost {
 				t.Fatalf("token prune method = %s", r.Method)
 			}
+			defer r.Body.Close()
+			var body bytes.Buffer
+			if _, err := body.ReadFrom(r.Body); err != nil {
+				t.Fatalf("ReadFrom(prune request) error = %v", err)
+			}
+			if !strings.Contains(body.String(), `"dry_run":true`) {
+				t.Fatalf("token prune request = %q", body.String())
+			}
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"deleted":1,"tokens":[{"id":"token-1","name":"ci"}]}`)
+			fmt.Fprint(w, `{"deleted":1,"dry_run":true,"tokens":[{"id":"token-1","name":"ci"}]}`)
 		case "/api/v1/tokens/token-1":
 			if r.Method != http.MethodGet {
 				t.Fatalf("token inspect method = %s", r.Method)
@@ -100,10 +108,10 @@ func TestRunTokenCreateListInspectRevoke(t *testing.T) {
 		t.Fatalf("token revoke output = %q", out.String())
 	}
 	out.Reset()
-	if err := run(context.Background(), &out, []string{"token", "prune", "--server", server.URL}); err != nil {
+	if err := run(context.Background(), &out, []string{"token", "prune", "--server", server.URL, "--dry-run"}); err != nil {
 		t.Fatalf("token prune error = %v", err)
 	}
-	if !strings.Contains(out.String(), `"deleted":1`) {
+	if !strings.Contains(out.String(), `"deleted":1`) || !strings.Contains(out.String(), `"dry_run":true`) {
 		t.Fatalf("token prune output = %q", out.String())
 	}
 	out.Reset()

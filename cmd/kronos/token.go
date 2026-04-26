@@ -107,13 +107,14 @@ func runTokenRevoke(ctx context.Context, out io.Writer, args []string) error {
 func runTokenPrune(ctx context.Context, out io.Writer, args []string) error {
 	fs := newFlagSet("token prune", out)
 	serverAddr := fs.String("server", "127.0.0.1:8500", "server address")
+	dryRun := fs.Bool("dry-run", false, "preview revoked and expired tokens without deleting them")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
 		return fmt.Errorf("token prune does not accept positional arguments")
 	}
-	return postControlJSON(ctx, http.DefaultClient, *serverAddr, "/api/v1/tokens/prune", nil, out)
+	return postControlJSON(ctx, http.DefaultClient, *serverAddr, "/api/v1/tokens/prune", map[string]bool{"dry_run": *dryRun}, out)
 }
 
 func runTokenVerify(ctx context.Context, out io.Writer, args []string) error {
