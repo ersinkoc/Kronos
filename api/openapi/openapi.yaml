@@ -29,7 +29,13 @@ paths:
           description: >
             Text exposition metrics, including kronos_agents_capacity for
             schedulable agent capacity, kronos_jobs_active for active work,
+            kronos_backups with type labels for backup mix,
+            kronos_backups_by_target and kronos_backups_bytes_by_target for
+            target-level distribution,
+            kronos_backups_by_storage and kronos_backups_bytes_by_storage for
+            storage-level distribution,
             kronos_backups_bytes_total for logical backup bytes,
+            kronos_backups_chunks_total for chunk volume,
             kronos_backups_protected for retention-protected backups,
             kronos_audit_events_total for audit-chain depth, and
             kronos_auth_rate_limited_total for token verification requests

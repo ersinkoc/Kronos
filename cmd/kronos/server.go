@@ -1130,8 +1130,13 @@ func writeJSON(w http.ResponseWriter, value any) {
 
 func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.AgentRegistry, stores apiStores, authLimiter *authRateLimiter) {
 	snapshot := obs.MetricsSnapshot{
-		JobsByStatus:         make(map[core.JobStatus]int),
-		AuthRateLimitedTotal: authLimiter.LimitedTotal(),
+		JobsByStatus:          make(map[core.JobStatus]int),
+		BackupsByType:         make(map[core.BackupType]int),
+		BackupsByTarget:       make(map[core.ID]int),
+		BackupsByStorage:      make(map[core.ID]int),
+		BackupsBytesByTarget:  make(map[core.ID]int64),
+		BackupsBytesByStorage: make(map[core.ID]int64),
+		AuthRateLimitedTotal:  authLimiter.LimitedTotal(),
 	}
 	if registry != nil {
 		for _, agent := range registry.List() {
@@ -1169,7 +1174,13 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 		}
 		snapshot.BackupsTotal = len(backups)
 		for _, backup := range backups {
+			snapshot.BackupsByType[backup.Type]++
+			snapshot.BackupsByTarget[backup.TargetID]++
+			snapshot.BackupsByStorage[backup.StorageID]++
 			snapshot.BackupsBytesTotal += backup.SizeBytes
+			snapshot.BackupsBytesByTarget[backup.TargetID] += backup.SizeBytes
+			snapshot.BackupsBytesByStorage[backup.StorageID] += backup.SizeBytes
+			snapshot.BackupsChunksTotal += backup.ChunkCount
 			if backup.Protected {
 				snapshot.BackupsProtected++
 			}

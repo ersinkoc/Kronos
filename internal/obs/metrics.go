@@ -11,16 +11,22 @@ import (
 
 // MetricsSnapshot is a dependency-free Prometheus exposition snapshot.
 type MetricsSnapshot struct {
-	AgentsHealthy        int
-	AgentsDegraded       int
-	AgentsCapacity       int
-	JobsByStatus         map[core.JobStatus]int
-	JobsActive           int
-	BackupsTotal         int
-	BackupsProtected     int
-	BackupsBytesTotal    int64
-	AuditEventsTotal     int
-	AuthRateLimitedTotal uint64
+	AgentsHealthy         int
+	AgentsDegraded        int
+	AgentsCapacity        int
+	JobsByStatus          map[core.JobStatus]int
+	JobsActive            int
+	BackupsTotal          int
+	BackupsByType         map[core.BackupType]int
+	BackupsByTarget       map[core.ID]int
+	BackupsByStorage      map[core.ID]int
+	BackupsProtected      int
+	BackupsBytesTotal     int64
+	BackupsBytesByTarget  map[core.ID]int64
+	BackupsBytesByStorage map[core.ID]int64
+	BackupsChunksTotal    int
+	AuditEventsTotal      int
+	AuthRateLimitedTotal  uint64
 }
 
 // WritePrometheus writes metrics in the Prometheus text exposition format.
@@ -80,6 +86,54 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 	if _, err := fmt.Fprintf(w, "kronos_backups_total %d\n", snapshot.BackupsTotal); err != nil {
 		return err
 	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_backups Number of backup metadata records by backup type."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_backups gauge"); err != nil {
+		return err
+	}
+	types := make([]string, 0, len(snapshot.BackupsByType))
+	for backupType := range snapshot.BackupsByType {
+		types = append(types, string(backupType))
+	}
+	sort.Strings(types)
+	for _, backupType := range types {
+		if _, err := fmt.Fprintf(w, "kronos_backups{type=%q} %d\n", sanitizeLabel(backupType), snapshot.BackupsByType[core.BackupType(backupType)]); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_backups_by_target Number of backup metadata records by target ID."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_backups_by_target gauge"); err != nil {
+		return err
+	}
+	targetIDs := make([]string, 0, len(snapshot.BackupsByTarget))
+	for targetID := range snapshot.BackupsByTarget {
+		targetIDs = append(targetIDs, string(targetID))
+	}
+	sort.Strings(targetIDs)
+	for _, targetID := range targetIDs {
+		if _, err := fmt.Fprintf(w, "kronos_backups_by_target{target_id=%q} %d\n", sanitizeLabel(targetID), snapshot.BackupsByTarget[core.ID(targetID)]); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_backups_by_storage Number of backup metadata records by storage ID."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_backups_by_storage gauge"); err != nil {
+		return err
+	}
+	storageIDs := make([]string, 0, len(snapshot.BackupsByStorage))
+	for storageID := range snapshot.BackupsByStorage {
+		storageIDs = append(storageIDs, string(storageID))
+	}
+	sort.Strings(storageIDs)
+	for _, storageID := range storageIDs {
+		if _, err := fmt.Fprintf(w, "kronos_backups_by_storage{storage_id=%q} %d\n", sanitizeLabel(storageID), snapshot.BackupsByStorage[core.ID(storageID)]); err != nil {
+			return err
+		}
+	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_backups_protected Number of backup metadata records protected from retention."); err != nil {
 		return err
 	}
@@ -96,6 +150,47 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "kronos_backups_bytes_total %d\n", snapshot.BackupsBytesTotal); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_backups_bytes_by_target Total logical bytes recorded across backup metadata by target ID."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_backups_bytes_by_target gauge"); err != nil {
+		return err
+	}
+	byteTargetIDs := make([]string, 0, len(snapshot.BackupsBytesByTarget))
+	for targetID := range snapshot.BackupsBytesByTarget {
+		byteTargetIDs = append(byteTargetIDs, string(targetID))
+	}
+	sort.Strings(byteTargetIDs)
+	for _, targetID := range byteTargetIDs {
+		if _, err := fmt.Fprintf(w, "kronos_backups_bytes_by_target{target_id=%q} %d\n", sanitizeLabel(targetID), snapshot.BackupsBytesByTarget[core.ID(targetID)]); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_backups_bytes_by_storage Total logical bytes recorded across backup metadata by storage ID."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_backups_bytes_by_storage gauge"); err != nil {
+		return err
+	}
+	byteStorageIDs := make([]string, 0, len(snapshot.BackupsBytesByStorage))
+	for storageID := range snapshot.BackupsBytesByStorage {
+		byteStorageIDs = append(byteStorageIDs, string(storageID))
+	}
+	sort.Strings(byteStorageIDs)
+	for _, storageID := range byteStorageIDs {
+		if _, err := fmt.Fprintf(w, "kronos_backups_bytes_by_storage{storage_id=%q} %d\n", sanitizeLabel(storageID), snapshot.BackupsBytesByStorage[core.ID(storageID)]); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_backups_chunks_total Total chunks recorded across backup metadata."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_backups_chunks_total gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_backups_chunks_total %d\n", snapshot.BackupsChunksTotal); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_audit_events_total Number of audit events stored in the hash chain."); err != nil {

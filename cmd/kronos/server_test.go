@@ -309,8 +309,11 @@ func TestServerMetricsEndpoint(t *testing.T) {
 	if err := stores.jobs.Save(core.Job{ID: "job-3", Status: core.JobStatusFinalizing, QueuedAt: now, StartedAt: now}); err != nil {
 		t.Fatalf("Save(finalizing job) error = %v", err)
 	}
-	if err := stores.backups.Save(core.Backup{ID: "backup-1", TargetID: "target", StorageID: "storage", JobID: "job-1", Type: core.BackupTypeFull, ManifestID: "manifest-1", StartedAt: now.Add(-time.Hour), EndedAt: now, SizeBytes: 2048, Protected: true}); err != nil {
+	if err := stores.backups.Save(core.Backup{ID: "backup-1", TargetID: "target", StorageID: "storage", JobID: "job-1", Type: core.BackupTypeFull, ManifestID: "manifest-1", StartedAt: now.Add(-time.Hour), EndedAt: now, SizeBytes: 2048, ChunkCount: 7, Protected: true}); err != nil {
 		t.Fatalf("Save(backup) error = %v", err)
+	}
+	if err := stores.backups.Save(core.Backup{ID: "backup-2", TargetID: "target-archive", StorageID: "storage-archive", JobID: "job-2", Type: core.BackupTypeIncremental, ManifestID: "manifest-2", StartedAt: now.Add(-30 * time.Minute), EndedAt: now, SizeBytes: 512, ChunkCount: 2}); err != nil {
+		t.Fatalf("Save(incremental backup) error = %v", err)
 	}
 	if _, err := stores.audit.Append(context.Background(), core.AuditEvent{Action: "target.created", ResourceType: "target", ResourceID: "target"}); err != nil {
 		t.Fatalf("Append(audit) error = %v", err)
@@ -340,9 +343,20 @@ func TestServerMetricsEndpoint(t *testing.T) {
 		`kronos_jobs{status="running"} 1`,
 		`kronos_jobs{status="finalizing"} 1`,
 		`kronos_jobs_active 2`,
-		`kronos_backups_total 1`,
+		`kronos_backups_total 2`,
+		`kronos_backups{type="full"} 1`,
+		`kronos_backups{type="incr"} 1`,
+		`kronos_backups_by_target{target_id="target"} 1`,
+		`kronos_backups_by_target{target_id="target-archive"} 1`,
+		`kronos_backups_by_storage{storage_id="storage"} 1`,
+		`kronos_backups_by_storage{storage_id="storage-archive"} 1`,
 		`kronos_backups_protected 1`,
-		`kronos_backups_bytes_total 2048`,
+		`kronos_backups_bytes_total 2560`,
+		`kronos_backups_bytes_by_target{target_id="target"} 2048`,
+		`kronos_backups_bytes_by_target{target_id="target-archive"} 512`,
+		`kronos_backups_bytes_by_storage{storage_id="storage"} 2048`,
+		`kronos_backups_bytes_by_storage{storage_id="storage-archive"} 512`,
+		`kronos_backups_chunks_total 9`,
 		`kronos_audit_events_total 1`,
 		`kronos_auth_rate_limited_total 0`,
 	} {

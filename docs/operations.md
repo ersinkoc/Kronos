@@ -52,6 +52,20 @@ critical restore points are intentionally pinned.
 Monitor `kronos_backups_bytes_total` for logical protected-data growth and to
 spot unexpectedly large backup runs.
 
+Monitor `kronos_backups_chunks_total` with logical bytes to spot chunking or
+deduplication changes after driver or compression updates.
+
+Monitor `kronos_backups{type="..."}` to confirm the expected full,
+incremental, differential, stream, or schema backup mix.
+
+Monitor `kronos_backups_by_storage{storage_id="..."}` and
+`kronos_backups_bytes_by_storage{storage_id="..."}` to catch uneven storage
+distribution before it becomes a capacity problem.
+
+Monitor `kronos_backups_by_target{target_id="..."}` and
+`kronos_backups_bytes_by_target{target_id="..."}` to catch fast-growing targets
+before they dominate backup windows or retention budgets.
+
 ## Upgrade
 
 1. Build and test the release artifact:
