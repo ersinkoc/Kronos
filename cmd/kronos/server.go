@@ -576,6 +576,7 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 	if registry == nil {
 		registry = control.NewAgentRegistry(nil, 30*time.Second)
 	}
+	startedAt := time.Now().UTC()
 	authLimiter := newAuthRateLimiter(authRateLimitSettings(cfg))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -609,7 +610,7 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 		if !requireScope(w, r, stores.tokens, "metrics:read") {
 			return
 		}
-		handleMetrics(w, r, registry, stores, authLimiter)
+		handleMetrics(w, r, registry, stores, authLimiter, startedAt)
 	})
 	mux.HandleFunc("/api/v1/agents/heartbeat", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -1136,8 +1137,18 @@ func writeJSON(w http.ResponseWriter, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 
-func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.AgentRegistry, stores apiStores, authLimiter *authRateLimiter) {
+func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.AgentRegistry, stores apiStores, authLimiter *authRateLimiter, startedAt time.Time) {
+	now := time.Now().UTC()
+	uptime := int64(0)
+	if !startedAt.IsZero() {
+		uptime = int64(now.Sub(startedAt).Seconds())
+		if uptime < 0 {
+			uptime = 0
+		}
+	}
 	snapshot := obs.MetricsSnapshot{
+		ProcessStartedAt:       startedAt.Unix(),
+		ProcessUptimeSeconds:   uptime,
 		TargetsByDriver:        make(map[core.TargetDriver]int),
 		StoragesByKind:         make(map[core.StorageKind]int),
 		SchedulesByType:        make(map[core.BackupType]int),

@@ -40,6 +40,9 @@ token reuse, or a larger verification budget.
 Monitor `kronos_build_info` after deploys to confirm every scraped control-plane
 instance is running the intended build metadata.
 
+Monitor `kronos_process_start_timestamp` and `kronos_process_uptime_seconds` to
+spot unexpected restarts or uneven rollout age across control-plane instances.
+
 Monitor `kronos_audit_events_total` to confirm the audit chain is growing during
 control-plane mutations and scheduled operations.
 

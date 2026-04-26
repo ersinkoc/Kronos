@@ -15,10 +15,12 @@ func TestWritePrometheus(t *testing.T) {
 
 	var out bytes.Buffer
 	err := WritePrometheus(&out, MetricsSnapshot{
-		AgentsHealthy:  2,
-		AgentsDegraded: 1,
-		AgentsCapacity: 5,
-		TargetsTotal:   6,
+		ProcessStartedAt:     1777118400,
+		ProcessUptimeSeconds: 120,
+		AgentsHealthy:        2,
+		AgentsDegraded:       1,
+		AgentsCapacity:       5,
+		TargetsTotal:         6,
 		TargetsByDriver: map[core.TargetDriver]int{
 			core.TargetDriverRedis: 6,
 		},
@@ -89,6 +91,8 @@ func TestWritePrometheus(t *testing.T) {
 	text := out.String()
 	for _, want := range []string{
 		`kronos_build_info{version="dev",commit="unknown",build_date="unknown"} 1`,
+		`kronos_process_start_timestamp 1777118400`,
+		`kronos_process_uptime_seconds 120`,
 		`kronos_agents{status="healthy"} 2`,
 		`kronos_agents{status="degraded"} 1`,
 		`kronos_agents_capacity 5`,

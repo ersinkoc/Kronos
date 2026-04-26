@@ -12,6 +12,8 @@ import (
 
 // MetricsSnapshot is a dependency-free Prometheus exposition snapshot.
 type MetricsSnapshot struct {
+	ProcessStartedAt       int64
+	ProcessUptimeSeconds   int64
 	AgentsHealthy          int
 	AgentsDegraded         int
 	AgentsCapacity         int
@@ -57,6 +59,24 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "kronos_build_info{version=\"%s\",commit=\"%s\",build_date=\"%s\"} 1\n", sanitizeLabel(buildinfo.Version), sanitizeLabel(buildinfo.Commit), sanitizeLabel(buildinfo.BuildDate)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_process_start_timestamp Unix timestamp when this Kronos process started."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_process_start_timestamp gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_process_start_timestamp %d\n", snapshot.ProcessStartedAt); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_process_uptime_seconds Seconds since this Kronos process started."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_process_uptime_seconds gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_process_uptime_seconds %d\n", snapshot.ProcessUptimeSeconds); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_agents Number of known agents by health status."); err != nil {
