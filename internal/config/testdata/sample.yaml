@@ -11,6 +11,11 @@ server:
       client_secret: "${env:KRONOS_TEST_OIDC_SECRET}"
   master_passphrase: "${file:master_passphrase}"
 
+notifications:
+  - name: ops-failures
+    when: job.failed
+    webhook: "https://hooks.example.com/kronos"
+
 projects:
   - name: default
     storages:

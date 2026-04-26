@@ -36,6 +36,9 @@ func TestLoadFileSample(t *testing.T) {
 	if project.Targets[0].Connection.Password != "pg-secret" {
 		t.Fatalf("target password = %q, want pg-secret", project.Targets[0].Connection.Password)
 	}
+	if len(cfg.Notifications) != 1 || cfg.Notifications[0].Name != "ops-failures" || cfg.Notifications[0].When != string(core.NotificationJobFailed) {
+		t.Fatalf("notifications = %#v", cfg.Notifications)
+	}
 }
 
 func TestLoadUnknownSecretScheme(t *testing.T) {
@@ -103,6 +106,36 @@ func TestValidateAuthRateLimitSettings(t *testing.T) {
 	badWindow.Server.Auth.TokenVerifyRateWindow = "soon"
 	if err := badWindow.Validate(); err == nil || !strings.Contains(err.Error(), "token_verify_rate_window") {
 		t.Fatalf("Validate(bad window) error = %v, want token_verify_rate_window", err)
+	}
+}
+
+func TestValidateNotificationSettings(t *testing.T) {
+	t.Parallel()
+
+	base := Config{
+		Server: ServerConfig{Listen: "127.0.0.1:8500", DataDir: "/tmp/kronos"},
+		Projects: []ProjectConfig{{
+			Name:     "default",
+			Storages: []StorageConfig{{Name: "local", Backend: "local", Path: "/tmp/repo"}},
+			Targets:  []TargetConfig{{Name: "redis", Driver: "redis", Connection: ConnectionConfig{Host: "127.0.0.1"}}},
+		}},
+	}
+	valid := base
+	valid.Notifications = []NotificationConfig{{Name: "ops", When: string(core.NotificationJobFailed), Webhook: "https://hooks.example.com/kronos"}}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("Validate(valid notification) error = %v", err)
+	}
+
+	missingEvent := base
+	missingEvent.Notifications = []NotificationConfig{{Name: "ops", Webhook: "https://hooks.example.com/kronos"}}
+	if err := missingEvent.Validate(); err == nil || !strings.Contains(err.Error(), "when or events") {
+		t.Fatalf("Validate(missing event) error = %v, want event error", err)
+	}
+
+	badEvent := base
+	badEvent.Notifications = []NotificationConfig{{Name: "ops", When: "job.started", Webhook: "https://hooks.example.com/kronos"}}
+	if err := badEvent.Validate(); err == nil || !strings.Contains(err.Error(), "not supported") {
+		t.Fatalf("Validate(bad event) error = %v, want not supported", err)
 	}
 }
 

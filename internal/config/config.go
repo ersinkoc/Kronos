@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/kronos/kronos/internal/core"
 	"github.com/kronos/kronos/internal/secret"
 	"gopkg.in/yaml.v3"
 )
@@ -116,8 +117,11 @@ type HookAction struct {
 
 // NotificationConfig configures event routing.
 type NotificationConfig struct {
+	Name     string   `json:"name,omitempty" yaml:"name,omitempty"`
 	When     string   `json:"when" yaml:"when"`
-	Channels []string `json:"channels" yaml:"channels"`
+	Events   []string `json:"events,omitempty" yaml:"events,omitempty"`
+	Webhook  string   `json:"webhook,omitempty" yaml:"webhook,omitempty"`
+	Channels []string `json:"channels,omitempty" yaml:"channels,omitempty"`
 }
 
 // LoadFile reads, expands, and validates a YAML config file.
@@ -185,6 +189,25 @@ func (c Config) Validate() error {
 	}
 	if len(c.Projects) == 0 {
 		errs = append(errs, errors.New("at least one project is required"))
+	}
+	for i, notification := range c.Notifications {
+		events := notification.Events
+		if notification.When != "" {
+			events = append(events, notification.When)
+		}
+		if len(events) == 0 {
+			errs = append(errs, fmt.Errorf("notifications[%d].when or events is required", i))
+		}
+		for _, event := range events {
+			switch core.NotificationEvent(event) {
+			case core.NotificationJobSucceeded, core.NotificationJobFailed, core.NotificationJobCanceled:
+			default:
+				errs = append(errs, fmt.Errorf("notifications[%d].event %q is not supported", i, event))
+			}
+		}
+		if notification.Webhook == "" && len(notification.Channels) == 0 {
+			errs = append(errs, fmt.Errorf("notifications[%d].webhook or channels is required", i))
+		}
 	}
 
 	for i, project := range c.Projects {

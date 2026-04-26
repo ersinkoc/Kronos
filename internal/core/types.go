@@ -76,6 +76,18 @@ const (
 	JobOperationRestore JobOperation = "restore"
 )
 
+// NotificationEvent identifies an event that can trigger an outbound notification.
+type NotificationEvent string
+
+const (
+	// NotificationJobSucceeded fires after a job completes successfully.
+	NotificationJobSucceeded NotificationEvent = "job.succeeded"
+	// NotificationJobFailed fires after a job fails.
+	NotificationJobFailed NotificationEvent = "job.failed"
+	// NotificationJobCanceled fires after a job is canceled.
+	NotificationJobCanceled NotificationEvent = "job.canceled"
+)
+
 // RoleName identifies a built-in RBAC role.
 type RoleName string
 
@@ -192,6 +204,17 @@ type RetentionPolicy struct {
 type RetentionRule struct {
 	Kind   string         `json:"kind"`
 	Params map[string]any `json:"params,omitempty"`
+}
+
+// NotificationRule routes matching events to an outbound webhook.
+type NotificationRule struct {
+	ID         ID                  `json:"id"`
+	Name       string              `json:"name"`
+	Events     []NotificationEvent `json:"events"`
+	WebhookURL string              `json:"webhook_url"`
+	Enabled    bool                `json:"enabled"`
+	CreatedAt  time.Time           `json:"created_at"`
+	UpdatedAt  time.Time           `json:"updated_at"`
 }
 
 // User is a local or federated Kronos principal.

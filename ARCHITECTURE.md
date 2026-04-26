@@ -46,7 +46,8 @@ flowchart LR
 
     next --> drivers[Postgres, MySQL, MongoDB drivers]
     next --> storageMore[SFTP, Azure, GCS backends]
-    next --> notify[Notifications and hooks]
+    active --> notify[Webhook notifications]
+    next --> hooks[Additional notification channels and hooks]
     next --> advanced[Advanced auth and operations polish]
 ```
 
@@ -73,6 +74,7 @@ flowchart TB
         Orchestrator[Job orchestrator]
         Stores[Resource stores]
         Audit[Hash-chained audit log]
+        Notify[Notification dispatcher]
         Metrics[Prometheus metrics]
     end
 
@@ -101,6 +103,7 @@ flowchart TB
     HTTP --> Auth
     HTTP --> Stores
     HTTP --> Audit
+    HTTP --> Notify
     HTTP --> Metrics
     Scheduler --> Orchestrator
     Orchestrator --> Stores

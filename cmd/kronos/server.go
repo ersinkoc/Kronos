@@ -246,6 +246,7 @@ type apiStores struct {
 	scheduleStates *control.ScheduleStateStore
 	backups        *control.BackupStore
 	policies       *control.RetentionPolicyStore
+	notifications  *control.NotificationRuleStore
 }
 
 type authRateLimiter struct {
@@ -405,7 +406,11 @@ func newAPIStores(db *kvstore.DB) (apiStores, error) {
 	if err != nil {
 		return apiStores{}, err
 	}
-	return apiStores{jobs: jobs, audit: auditLog, tokens: tokens, users: users, targets: targets, storages: storages, schedules: schedules, scheduleStates: scheduleStates, backups: backups, policies: policies}, nil
+	notifications, err := control.NewNotificationRuleStore(db)
+	if err != nil {
+		return apiStores{}, err
+	}
+	return apiStores{jobs: jobs, audit: auditLog, tokens: tokens, users: users, targets: targets, storages: storages, schedules: schedules, scheduleStates: scheduleStates, backups: backups, policies: policies, notifications: notifications}, nil
 }
 
 func seedAPIStoresFromConfig(stores apiStores, cfg *config.Config, now time.Time) error {
@@ -414,6 +419,30 @@ func seedAPIStoresFromConfig(stores apiStores, cfg *config.Config, now time.Time
 	}
 	if now.IsZero() {
 		now = time.Now().UTC()
+	}
+	if stores.notifications != nil {
+		for i, notification := range cfg.Notifications {
+			name := notification.Name
+			if name == "" {
+				name = fmt.Sprintf("notification-%d", i+1)
+			}
+			events := notificationEvents(notification)
+			webhook := notification.Webhook
+			if webhook == "" && len(notification.Channels) > 0 {
+				webhook = notification.Channels[0]
+			}
+			if err := stores.notifications.Save(core.NotificationRule{
+				ID:         core.ID("config/" + name),
+				Name:       name,
+				Events:     events,
+				WebhookURL: webhook,
+				Enabled:    true,
+				CreatedAt:  now,
+				UpdatedAt:  now,
+			}); err != nil {
+				return fmt.Errorf("seed notification %s: %w", name, err)
+			}
+		}
 	}
 	for _, project := range cfg.Projects {
 		targetIDs := make(map[string]core.ID, len(project.Targets))
@@ -480,6 +509,27 @@ func seedAPIStoresFromConfig(stores apiStores, cfg *config.Config, now time.Time
 		}
 	}
 	return nil
+}
+
+func notificationEvents(notification config.NotificationConfig) []core.NotificationEvent {
+	values := notification.Events
+	if notification.When != "" {
+		values = append(values, notification.When)
+	}
+	events := make([]core.NotificationEvent, 0, len(values))
+	seen := make(map[core.NotificationEvent]struct{}, len(values))
+	for _, value := range values {
+		event := core.NotificationEvent(strings.TrimSpace(value))
+		if event == "" {
+			continue
+		}
+		if _, ok := seen[event]; ok {
+			continue
+		}
+		seen[event] = struct{}{}
+		events = append(events, event)
+	}
+	return events
 }
 
 func configResourceID(project string, name string) core.ID {
@@ -848,7 +898,7 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 			if !requireScope(w, r, stores.tokens, "job:write") {
 				return
 			}
-			handleFinishJob(w, r, stores.jobs, stores.backups, stores.audit, core.ID(id))
+			handleFinishJob(w, r, stores.jobs, stores.backups, stores.audit, stores.notifications, core.ID(id))
 		default:
 			w.Header().Set("Allow", "GET, POST")
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -2337,7 +2387,7 @@ func handleGetJob(w http.ResponseWriter, store *control.JobStore, id core.ID) {
 	writeJSON(w, job)
 }
 
-func handleFinishJob(w http.ResponseWriter, r *http.Request, jobs *control.JobStore, backups *control.BackupStore, auditLog *kaudit.Log, id core.ID) {
+func handleFinishJob(w http.ResponseWriter, r *http.Request, jobs *control.JobStore, backups *control.BackupStore, auditLog *kaudit.Log, notifications *control.NotificationRuleStore, id core.ID) {
 	if jobs == nil {
 		http.Error(w, "job store is not configured", http.StatusServiceUnavailable)
 		return
@@ -2415,6 +2465,12 @@ func handleFinishJob(w http.ResponseWriter, r *http.Request, jobs *control.JobSt
 	}
 	if !backupID.IsZero() {
 		metadata["backup_id"] = backupID
+	}
+	notificationCtx, cancelNotifications := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancelNotifications()
+	deliveries := control.NotificationDispatcher{Store: notifications}.DispatchJobTerminal(notificationCtx, job)
+	if len(deliveries) > 0 {
+		metadata["notifications"] = deliveries
 	}
 	if handleAuditAppendError(w, appendAuditEvent(r, auditLog, "job.finished", "job", job.ID, metadata)) {
 		return

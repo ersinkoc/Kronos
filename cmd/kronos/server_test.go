@@ -1421,6 +1421,25 @@ func TestServerJobClaimAndFinishEndpoints(t *testing.T) {
 	if err := stores.jobs.Save(core.Job{ID: "job-1", TargetID: "target", StorageID: "storage", Type: core.BackupTypeFull, Status: core.JobStatusQueued, QueuedAt: now}); err != nil {
 		t.Fatalf("Save(job-1) error = %v", err)
 	}
+	var notificationPayload map[string]any
+	webhook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&notificationPayload); err != nil {
+			t.Fatalf("Decode(notification) error = %v", err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer webhook.Close()
+	if err := stores.notifications.Save(core.NotificationRule{
+		ID:         "rule-1",
+		Name:       "success-webhook",
+		Events:     []core.NotificationEvent{core.NotificationJobSucceeded},
+		WebhookURL: webhook.URL,
+		Enabled:    true,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}); err != nil {
+		t.Fatalf("Save(notification) error = %v", err)
+	}
 	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, stores))
 	defer server.Close()
 
@@ -1482,6 +1501,13 @@ func TestServerJobClaimAndFinishEndpoints(t *testing.T) {
 	}
 	if events[0].Metadata["agent_id"] != "agent-job-1" || events[0].Metadata["request_id"] != "req-job-claim-1" {
 		t.Fatalf("job claimed metadata = %#v", events[0].Metadata)
+	}
+	if notificationPayload["event"] != string(core.NotificationJobSucceeded) || notificationPayload["job_id"] != "job-1" {
+		t.Fatalf("notification payload = %#v", notificationPayload)
+	}
+	deliveries, ok := events[1].Metadata["notifications"].([]any)
+	if !ok || len(deliveries) != 1 {
+		t.Fatalf("job finished notification metadata = %#v", events[1].Metadata)
 	}
 }
 

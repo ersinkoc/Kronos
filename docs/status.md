@@ -46,6 +46,8 @@ flowchart LR
 - Token-based authorization with scoped bearer tokens, role-capped token
   creation, inactive token pruning, request IDs, and audit recording for
   mutations.
+- Webhook notification rules for terminal job events, with delivery metadata in
+  the audit chain.
 - Readiness, health, Prometheus metrics, operations docs, CLI docs, quickstart,
   architecture docs, deployment topology guidance, restore drill guidance,
   multi-platform release artifacts, checksums, provenance metadata, SBOM
@@ -100,7 +102,8 @@ are:
   Storage.
 - Deeper WebUI interaction against real API data beyond the current embedded
   dashboard shell.
-- Notification delivery and hook execution surfaces from the product plan.
+- Richer notification channels and hook execution surfaces from the product
+  plan.
 - Broader production hardening around auth integrations and multi-instance
   operational patterns.
 
@@ -110,7 +113,7 @@ are:
    backup/restore slice and conformance tests.
 2. Wire the WebUI to live API endpoints for dashboard state, jobs, backups, and
    agents.
-3. Add notification and hook primitives around job terminal events.
+3. Add retries, signing, and additional channels for notification delivery.
 4. Sign release provenance and SBOM metadata with keyless CI identity.
 5. Add cloud-specific deployment manifests for common managed Kubernetes
    environments.

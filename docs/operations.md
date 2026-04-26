@@ -108,6 +108,29 @@ Run `./bin/kronos token prune --dry-run` after token rotation windows to preview
 revoked or expired token metadata, then `./bin/kronos token prune` to remove it
 from the control-plane store.
 
+## Notifications
+
+Kronos can post webhook notifications when jobs reach a terminal state. Configure
+top-level notification rules in `kronos.yaml`:
+
+```yaml
+notifications:
+  - name: ops-failures
+    when: job.failed
+    webhook: "${env:KRONOS_OPS_WEBHOOK}"
+  - name: restore-drills
+    events:
+      - job.succeeded
+      - job.canceled
+    webhook: "${env:KRONOS_RESTORE_DRILL_WEBHOOK}"
+```
+
+Supported events are `job.succeeded`, `job.failed`, and `job.canceled`. Webhook
+delivery is attempted during job finalization and delivery results are recorded
+in the `job.finished` audit event metadata. Treat notification endpoints as
+production dependencies: use HTTPS, keep receiver timeouts short, and make the
+receiver idempotent because retries may be added in later releases.
+
 ## Alert Rule Examples
 
 Use these Prometheus rules as a starting point and tune thresholds to match your
