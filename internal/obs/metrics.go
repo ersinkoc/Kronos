@@ -25,6 +25,7 @@ type MetricsSnapshot struct {
 	JobsByOperation        map[core.JobOperation]int
 	JobsActive             int
 	JobsActiveByOperation  map[core.JobOperation]int
+	JobsActiveByAgent      map[string]int
 	BackupsTotal           int
 	BackupsByType          map[core.BackupType]int
 	BackupsByTarget        map[core.ID]int
@@ -147,6 +148,11 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 	}
 	if err := writeLabeledGauge(w, "kronos_jobs_active_by_operation", "Number of currently active jobs by operation.", "operation", sortedStringKeys(snapshot.JobsActiveByOperation), func(operation string) int {
 		return snapshot.JobsActiveByOperation[core.JobOperation(operation)]
+	}); err != nil {
+		return err
+	}
+	if err := writeLabeledGauge(w, "kronos_jobs_active_by_agent", "Number of currently active jobs by agent ID.", "agent_id", sortedStringKeys(snapshot.JobsActiveByAgent), func(agentID string) int {
+		return snapshot.JobsActiveByAgent[agentID]
 	}); err != nil {
 		return err
 	}

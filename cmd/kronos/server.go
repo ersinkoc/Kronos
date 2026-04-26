@@ -1136,6 +1136,7 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 		JobsByStatus:           make(map[core.JobStatus]int),
 		JobsByOperation:        make(map[core.JobOperation]int),
 		JobsActiveByOperation:  make(map[core.JobOperation]int),
+		JobsActiveByAgent:      make(map[string]int),
 		BackupsByType:          make(map[core.BackupType]int),
 		BackupsByTarget:        make(map[core.ID]int),
 		BackupsByStorage:       make(map[core.ID]int),
@@ -1211,6 +1212,9 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 				snapshot.JobsActive++
 				if job.Operation != "" {
 					snapshot.JobsActiveByOperation[job.Operation]++
+				}
+				if job.AgentID != "" {
+					snapshot.JobsActiveByAgent[job.AgentID]++
 				}
 			}
 		}

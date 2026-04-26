@@ -303,10 +303,10 @@ func TestServerMetricsEndpoint(t *testing.T) {
 	if err := stores.jobs.Save(core.Job{ID: "job-1", Operation: core.JobOperationBackup, Status: core.JobStatusQueued, QueuedAt: now}); err != nil {
 		t.Fatalf("Save(job) error = %v", err)
 	}
-	if err := stores.jobs.Save(core.Job{ID: "job-2", Operation: core.JobOperationBackup, Status: core.JobStatusRunning, QueuedAt: now, StartedAt: now}); err != nil {
+	if err := stores.jobs.Save(core.Job{ID: "job-2", Operation: core.JobOperationBackup, AgentID: "agent-1", Status: core.JobStatusRunning, QueuedAt: now, StartedAt: now}); err != nil {
 		t.Fatalf("Save(running job) error = %v", err)
 	}
-	if err := stores.jobs.Save(core.Job{ID: "job-3", Operation: core.JobOperationRestore, Status: core.JobStatusFinalizing, QueuedAt: now, StartedAt: now}); err != nil {
+	if err := stores.jobs.Save(core.Job{ID: "job-3", Operation: core.JobOperationRestore, AgentID: "agent-degraded", Status: core.JobStatusFinalizing, QueuedAt: now, StartedAt: now}); err != nil {
 		t.Fatalf("Save(finalizing job) error = %v", err)
 	}
 	for _, target := range []core.Target{
@@ -400,6 +400,8 @@ func TestServerMetricsEndpoint(t *testing.T) {
 		`kronos_jobs_active 2`,
 		`kronos_jobs_active_by_operation{operation="backup"} 1`,
 		`kronos_jobs_active_by_operation{operation="restore"} 1`,
+		`kronos_jobs_active_by_agent{agent_id="agent-1"} 1`,
+		`kronos_jobs_active_by_agent{agent_id="agent-degraded"} 1`,
 		`kronos_backups_total 2`,
 		`kronos_backups{type="full"} 1`,
 		`kronos_backups{type="incr"} 1`,
