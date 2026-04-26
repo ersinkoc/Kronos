@@ -19,7 +19,9 @@ type MetricsSnapshot struct {
 	SchedulesTotal         int
 	SchedulesPaused        int
 	JobsByStatus           map[core.JobStatus]int
+	JobsByOperation        map[core.JobOperation]int
 	JobsActive             int
+	JobsActiveByOperation  map[core.JobOperation]int
 	BackupsTotal           int
 	BackupsByType          map[core.BackupType]int
 	BackupsByTarget        map[core.ID]int
@@ -110,6 +112,11 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 	}); err != nil {
 		return err
 	}
+	if err := writeLabeledGauge(w, "kronos_jobs_by_operation", "Number of jobs by operation.", "operation", sortedStringKeys(snapshot.JobsByOperation), func(operation string) int {
+		return snapshot.JobsByOperation[core.JobOperation(operation)]
+	}); err != nil {
+		return err
+	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_jobs_active Number of currently active jobs."); err != nil {
 		return err
 	}
@@ -117,6 +124,11 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "kronos_jobs_active %d\n", snapshot.JobsActive); err != nil {
+		return err
+	}
+	if err := writeLabeledGauge(w, "kronos_jobs_active_by_operation", "Number of currently active jobs by operation.", "operation", sortedStringKeys(snapshot.JobsActiveByOperation), func(operation string) int {
+		return snapshot.JobsActiveByOperation[core.JobOperation(operation)]
+	}); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_backups_total Number of backup metadata records."); err != nil {

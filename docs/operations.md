@@ -50,6 +50,10 @@ resource CRUD changes to catch missing inventory quickly.
 Monitor `kronos_jobs_active` alongside `kronos_agents_capacity` to alert when
 running and finalizing work is saturating the fleet.
 
+Monitor `kronos_jobs_by_operation{operation="..."}` and
+`kronos_jobs_active_by_operation{operation="..."}` to separate backup pressure
+from restore pressure during incidents.
+
 Monitor `kronos_backups_protected` before retention changes to make sure
 critical restore points are intentionally pinned.
 

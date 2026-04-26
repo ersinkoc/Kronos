@@ -1131,6 +1131,8 @@ func writeJSON(w http.ResponseWriter, value any) {
 func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.AgentRegistry, stores apiStores, authLimiter *authRateLimiter) {
 	snapshot := obs.MetricsSnapshot{
 		JobsByStatus:           make(map[core.JobStatus]int),
+		JobsByOperation:        make(map[core.JobOperation]int),
+		JobsActiveByOperation:  make(map[core.JobOperation]int),
 		BackupsByType:          make(map[core.BackupType]int),
 		BackupsByTarget:        make(map[core.ID]int),
 		BackupsByStorage:       make(map[core.ID]int),
@@ -1192,8 +1194,14 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 		}
 		for _, job := range jobs {
 			snapshot.JobsByStatus[job.Status]++
+			if job.Operation != "" {
+				snapshot.JobsByOperation[job.Operation]++
+			}
 			if job.Status == core.JobStatusRunning || job.Status == core.JobStatusFinalizing {
 				snapshot.JobsActive++
+				if job.Operation != "" {
+					snapshot.JobsActiveByOperation[job.Operation]++
+				}
 			}
 		}
 	}

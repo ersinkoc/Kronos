@@ -29,6 +29,8 @@ paths:
           description: >
             Text exposition metrics, including kronos_agents_capacity for
             schedulable agent capacity, kronos_jobs_active for active work,
+            kronos_jobs_by_operation and kronos_jobs_active_by_operation for
+            backup/restore work mix,
             kronos_targets_total, kronos_storages_total,
             kronos_schedules_total, and kronos_schedules_paused for
             control-plane inventory,
