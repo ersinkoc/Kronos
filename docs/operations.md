@@ -96,6 +96,56 @@ Monitor `kronos_retention_policies_total`, `kronos_users_total`,
 `kronos_tokens_total`, `kronos_tokens_revoked`, and `kronos_tokens_expired` to
 track administrative inventory and token cleanup.
 
+## Alert Rule Examples
+
+Use these Prometheus rules as a starting point and tune thresholds to match your
+backup windows and deployment cadence:
+
+```yaml
+groups:
+  - name: kronos-control-plane
+    rules:
+      - alert: KronosControlPlaneRestarted
+        expr: kronos_process_uptime_seconds < 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Kronos control plane restarted recently
+
+      - alert: KronosNoBackupFreshness
+        expr: time() - kronos_backups_latest_completed_timestamp > 6 * 60 * 60
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: No completed Kronos backup in the expected freshness window
+
+      - alert: KronosAgentCapacitySaturated
+        expr: kronos_jobs_active >= kronos_agents_capacity and kronos_agents_capacity > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Kronos active jobs are saturating healthy agent capacity
+
+      - alert: KronosAuthRateLimited
+        expr: increase(kronos_auth_rate_limited_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Kronos token verification requests are being rate limited
+
+      - alert: KronosExpiredTokensPresent
+        expr: kronos_tokens_expired > 0
+        for: 1h
+        labels:
+          severity: info
+        annotations:
+          summary: Kronos has expired API tokens that can be cleaned up
+```
+
 ## Upgrade
 
 1. Build and test the release artifact:
