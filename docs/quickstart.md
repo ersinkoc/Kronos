@@ -89,6 +89,10 @@ Register a Redis target. Adjust the endpoint if Redis is elsewhere:
 ./bin/kronos target inspect --id redis-local
 ```
 
+Redis/Valkey is the executable database driver in this build. PostgreSQL,
+MySQL/MariaDB, and MongoDB are still roadmap drivers and fail fast with an
+explicit unsupported-driver error when probed or executed.
+
 ## 6. Run A Backup
 
 ```bash

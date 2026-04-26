@@ -133,6 +133,20 @@ func TestRunTargetAddRequiresFields(t *testing.T) {
 	}
 }
 
+func TestRunTargetTestRejectsUnimplementedDrivers(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	err := run(context.Background(), &out, []string{"target", "test", "--driver", "postgres", "--endpoint", "127.0.0.1:5432"})
+	if err == nil {
+		t.Fatal("target test postgres error = nil, want unsupported driver error")
+	}
+	text := err.Error()
+	if !strings.Contains(text, "not implemented") || !strings.Contains(text, "supported target drivers: redis") {
+		t.Fatalf("target test error = %q", text)
+	}
+}
+
 func TestRunTargetTestRedis(t *testing.T) {
 	t.Parallel()
 

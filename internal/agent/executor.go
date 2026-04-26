@@ -323,7 +323,7 @@ func (e BackupExecutor) executeBackup(ctx context.Context, job core.Job) (*core.
 	}
 	driver, ok := e.Drivers.Get(target.Driver)
 	if !ok {
-		return nil, fmt.Errorf("driver %q is not registered", target.Driver)
+		return nil, fmt.Errorf("target driver %q is not implemented in this build; registered target drivers: %s", target.Driver, strings.Join(e.Drivers.Names(), ", "))
 	}
 	pipeline, err := e.PipelineFactory(backend)
 	if err != nil {
@@ -462,7 +462,7 @@ func (e BackupExecutor) executeRestore(ctx context.Context, job core.Job) error 
 	}
 	driver, ok := e.Drivers.Get(target.Driver)
 	if !ok {
-		return fmt.Errorf("driver %q is not registered", target.Driver)
+		return fmt.Errorf("target driver %q is not implemented in this build; registered target drivers: %s", target.Driver, strings.Join(e.Drivers.Names(), ", "))
 	}
 	pipeline, err := e.PipelineFactory(backend)
 	if err != nil {

@@ -101,7 +101,8 @@ Kronos is usable for its implemented Redis/local/S3-oriented paths, but it is
 not yet a broad multi-database production suite. The largest remaining areas
 are:
 
-- Additional database drivers such as PostgreSQL, MySQL, and MongoDB.
+- Additional database drivers such as PostgreSQL, MySQL, and MongoDB. Current
+  executable driver coverage is Redis/Valkey.
 - Additional storage backends such as SFTP, Azure Blob, and Google Cloud
   Storage. Current executable backends are local filesystem and S3-compatible
   object storage.

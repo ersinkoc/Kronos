@@ -233,7 +233,7 @@ func runTargetTest(ctx context.Context, out io.Writer, args []string) error {
 	}
 	driver, ok := registry.Get(*driverName)
 	if !ok {
-		return fmt.Errorf("unsupported target driver %q", *driverName)
+		return fmt.Errorf("target driver %q is not implemented in this build; supported target drivers: %s", *driverName, strings.Join(registry.Names(), ", "))
 	}
 	target := drivers.Target{
 		Name:       nameValue,

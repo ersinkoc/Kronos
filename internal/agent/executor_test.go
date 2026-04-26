@@ -77,6 +77,43 @@ func TestBackupExecutorRunsFullBackupAndCommitsManifest(t *testing.T) {
 	}
 }
 
+func TestBackupExecutorReportsUnimplementedDriver(t *testing.T) {
+	t.Parallel()
+
+	_, privateKey, err := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{9}, 64)))
+	if err != nil {
+		t.Fatalf("GenerateKey() error = %v", err)
+	}
+	registry := drivers.NewRegistry()
+	driver := &executorFakeDriver{}
+	if err := registry.Register(driver); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	executor := BackupExecutor{
+		Drivers: registry,
+		Targets: map[core.ID]drivers.Target{
+			"target-1": {Name: "pg", Driver: "postgres"},
+		},
+		Backends: map[core.ID]storage.Backend{
+			"storage-1": storagetest.NewMemoryBackend("memory"),
+		},
+		PipelineFactory: testPipelineFactory(t),
+		PrivateKey:      privateKey,
+	}
+	_, err = executor.Execute(context.Background(), core.Job{
+		ID:        "job-1",
+		TargetID:  "target-1",
+		StorageID: "storage-1",
+		Type:      core.BackupTypeFull,
+	})
+	if err == nil {
+		t.Fatal("Execute() error = nil, want unsupported driver error")
+	}
+	if !strings.Contains(err.Error(), "not implemented") || !strings.Contains(err.Error(), "registered target drivers: fake") {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
 func TestBackupExecutorRunsIncrementalBackupWithParent(t *testing.T) {
 	t.Parallel()
 
