@@ -157,7 +157,7 @@ groups:
 
 ## Upgrade
 
-1. Build and test the release artifact:
+1. Build and test the release artifacts:
 
    ```bash
    make test
@@ -171,7 +171,20 @@ groups:
    pipeline needs exact stamped values. Set `RELEASE_TARGETS="linux/amd64"` to
    restrict the target matrix.
 
-2. Drain new work by pausing schedules that should not run during the upgrade:
+2. Publish an immutable release from a signed tag when cutting a production
+   version:
+
+   ```bash
+   git tag -s v1.2.3 -m "v1.2.3"
+   git push origin v1.2.3
+   ```
+
+   The `release` workflow runs the full Go test suite, builds the default
+   linux/darwin amd64/arm64 binaries through `scripts/release.sh`, verifies all
+   checksums, uploads workflow artifacts, and publishes the tag assets to the
+   GitHub release.
+
+3. Drain new work by pausing schedules that should not run during the upgrade:
 
    ```bash
    ./bin/kronos schedule list
@@ -179,16 +192,16 @@ groups:
    ./bin/kronos jobs list
    ```
 
-3. Wait for running jobs to finish or cancel jobs that must not continue:
+4. Wait for running jobs to finish or cancel jobs that must not continue:
 
    ```bash
    ./bin/kronos jobs inspect --id <job-id>
    ./bin/kronos jobs cancel --id <job-id>
    ```
 
-4. Stop agents, replace the binary, then restart the control plane and agents.
+5. Stop agents, replace the binary, then restart the control plane and agents.
 
-5. Confirm health and resume schedules:
+6. Confirm health and resume schedules:
 
    ```bash
    curl -fsS http://127.0.0.1:8500/healthz

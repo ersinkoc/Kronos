@@ -73,6 +73,27 @@ func TestKubernetesManifestsExist(t *testing.T) {
 	}
 }
 
+func TestReleaseWorkflowPublishesArtifacts(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatalf("ReadFile(release.yml) error = %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"tags:",
+		"./scripts/release.sh",
+		"sha256sum -c",
+		"actions/upload-artifact@v4",
+		"gh release create",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("release.yml missing %q", want)
+		}
+	}
+}
+
 func markdownFiles(t *testing.T, root string) []string {
 	t.Helper()
 
