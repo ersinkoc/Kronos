@@ -58,7 +58,7 @@ func TestKubernetesManifestsExist(t *testing.T) {
 	t.Parallel()
 
 	root := filepath.Join("..", "deploy", "kubernetes")
-	for _, name := range []string{"namespace.yaml", "configmap.yaml", "pvc.yaml", "deployment.yaml", "service.yaml"} {
+	for _, name := range []string{"namespace.yaml", "configmap.yaml", "pvc.yaml", "deployment.yaml", "service.yaml", "agent-deployment.yaml"} {
 		path := filepath.Join(root, name)
 		data, err := os.ReadFile(path)
 		if err != nil {

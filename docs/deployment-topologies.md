@@ -87,10 +87,12 @@ flowchart TB
 ```
 
 Start from [deploy/kubernetes](../deploy/kubernetes/README.md). Keep
-`replicas: 1` for the control plane while it uses embedded local state. Scale
-workers by adding agents, not by adding control-plane replicas. Use Kubernetes
-Secrets or an external secret injector for manifest signing keys, chunk keys,
-tokens, and repository credentials.
+`replicas: 1` for the control plane while it uses embedded local state. The
+example agent Deployment starts at `replicas: 0`; create
+`kronos-agent-secrets`, then scale agents deliberately. Scale workers by adding
+agents, not by adding control-plane replicas. Use Kubernetes Secrets or an
+external secret injector for manifest signing keys, chunk keys, tokens, and
+repository credentials.
 
 ## Hot Standby Agents
 

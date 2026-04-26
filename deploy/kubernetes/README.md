@@ -1,7 +1,8 @@
 # Kubernetes Deployment Example
 
 These manifests are a production-oriented starting point for a single Kronos
-control-plane replica with persistent embedded state.
+control-plane replica with persistent embedded state and an opt-in worker agent
+Deployment.
 
 Apply the example:
 
@@ -10,6 +11,19 @@ kubectl apply -f deploy/kubernetes/
 kubectl -n kronos rollout status deployment/kronos-control-plane
 kubectl -n kronos port-forward service/kronos-control-plane 8500:8500
 curl -fsS http://127.0.0.1:8500/readyz
+```
+
+The agent Deployment starts with `replicas: 0` so the example can be applied
+before production secrets exist. After creating an agent token and keys, create
+the secret and scale workers:
+
+```bash
+kubectl -n kronos create secret generic kronos-agent-secrets \
+  --from-literal=token="$KRONOS_TOKEN" \
+  --from-literal=manifest-private-key="$KRONOS_MANIFEST_PRIVATE_KEY" \
+  --from-literal=chunk-key="$KRONOS_CHUNK_KEY"
+kubectl -n kronos scale deployment/kronos-agent --replicas=1
+kubectl -n kronos rollout status deployment/kronos-agent
 ```
 
 Before using this in production:
@@ -21,4 +35,6 @@ Before using this in production:
   concurrency-safe service.
 - Configure backup repository credentials with Kubernetes Secrets or external
   secret injection.
+- Keep agent `replicas` and `--capacity` aligned with each database target's
+  safe backup concurrency.
 - Add NetworkPolicy, TLS termination, and RBAC appropriate for your cluster.
