@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kronos/kronos/internal/obs"
 	control "github.com/kronos/kronos/internal/server"
 )
 
@@ -98,9 +99,11 @@ func TestRunAgentHeartbeatSendsBearerToken(t *testing.T) {
 	t.Parallel()
 
 	var gotAuth atomic.Value
-	ctx, cancel := context.WithCancel(context.Background())
+	var gotRequestID atomic.Value
+	ctx, cancel := context.WithCancel(obs.WithRequestID(context.Background(), "req-heartbeat-1"))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth.Store(r.Header.Get("Authorization"))
+		gotRequestID.Store(r.Header.Get(obs.RequestIDHeader))
 		cancel()
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -112,6 +115,9 @@ func TestRunAgentHeartbeatSendsBearerToken(t *testing.T) {
 	}
 	if got, _ := gotAuth.Load().(string); got != "Bearer agent-secret" {
 		t.Fatalf("Authorization = %q, want bearer token", got)
+	}
+	if got, _ := gotRequestID.Load().(string); got != "req-heartbeat-1" {
+		t.Fatalf("%s = %q, want req-heartbeat-1", obs.RequestIDHeader, got)
 	}
 }
 

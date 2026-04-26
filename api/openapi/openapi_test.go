@@ -46,6 +46,21 @@ func TestOpenAPIReferencesResolve(t *testing.T) {
 	}
 }
 
+func TestOpenAPIDocumentsRequestIDAndAuthRateLimit(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile("openapi.yaml")
+	if err != nil {
+		t.Fatalf("ReadFile(openapi.yaml) error = %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{"X-Kronos-Request-ID", "RequestID:", `"429":`, "Retry-After"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("openapi.yaml missing %q", want)
+		}
+	}
+}
+
 func collectRefs(value any) []string {
 	var refs []string
 	switch typed := value.(type) {

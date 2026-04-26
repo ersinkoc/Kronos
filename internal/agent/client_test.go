@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/kronos/kronos/internal/core"
 	"github.com/kronos/kronos/internal/kvstore"
+	"github.com/kronos/kronos/internal/obs"
 	control "github.com/kronos/kronos/internal/server"
 )
 
@@ -161,6 +163,49 @@ func TestClientSendsAgentIDHeader(t *testing.T) {
 	}
 	if gotAgentID != "agent-1" {
 		t.Fatalf("X-Kronos-Agent-ID = %q", gotAgentID)
+	}
+}
+
+func TestClientSendsRequestIDHeader(t *testing.T) {
+	t.Parallel()
+
+	var gotRequestID string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRequestID = r.Header.Get(obs.RequestIDHeader)
+		writeTestJSON(t, w, control.AgentSnapshot{ID: "agent-1", Status: control.AgentHealthy})
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, server.Client())
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	ctx := obs.WithRequestID(context.Background(), "req-agent-1")
+	if _, err := client.Heartbeat(ctx, control.AgentHeartbeat{ID: "agent-1"}); err != nil {
+		t.Fatalf("Heartbeat() error = %v", err)
+	}
+	if gotRequestID != "req-agent-1" {
+		t.Fatalf("%s = %q, want req-agent-1", obs.RequestIDHeader, gotRequestID)
+	}
+}
+
+func TestClientErrorIncludesRequestIDAndBody(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(obs.RequestIDHeader, "req-agent-error-1")
+		http.Error(w, "agent denied", http.StatusForbidden)
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, server.Client())
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	_, err = client.Claim(context.Background())
+	if err == nil {
+		t.Fatal("Claim() error = nil, want error")
+	}
+	if text := err.Error(); !strings.Contains(text, "request_id=req-agent-error-1") || !strings.Contains(text, "agent denied") {
+		t.Fatalf("Claim() error = %q", text)
 	}
 }
 

@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 
 	"github.com/kronos/kronos/internal/core"
+	"github.com/kronos/kronos/internal/obs"
 	control "github.com/kronos/kronos/internal/server"
 )
 
@@ -164,6 +166,9 @@ func (c *Client) newRequest(ctx context.Context, method string, path string, bod
 	if agentID := strings.TrimSpace(c.AgentID); agentID != "" {
 		req.Header.Set("X-Kronos-Agent-ID", agentID)
 	}
+	if requestID, ok := obs.RequestIDFromContext(ctx); ok {
+		req.Header.Set(obs.RequestIDHeader, requestID)
+	}
 	return req, nil
 }
 
@@ -174,13 +179,34 @@ func (c *Client) do(req *http.Request, path string, dst any) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("control-plane request %s failed: %s", path, resp.Status)
+		return fmt.Errorf("control-plane request %s failed: %s%s: %s", path, resp.Status, responseRequestID(resp), responseBodySnippet(resp))
 	}
 	if dst == nil {
 		return nil
 	}
 	decoder := json.NewDecoder(resp.Body)
 	return decoder.Decode(dst)
+}
+
+func responseRequestID(resp *http.Response) string {
+	if resp == nil {
+		return ""
+	}
+	if requestID := strings.TrimSpace(resp.Header.Get(obs.RequestIDHeader)); requestID != "" {
+		return " request_id=" + requestID
+	}
+	return ""
+}
+
+func responseBodySnippet(resp *http.Response) string {
+	if resp == nil || resp.Body == nil {
+		return ""
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 func (c *Client) endpoint(path string) string {

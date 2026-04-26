@@ -21,7 +21,7 @@ func TestRunHelp(t *testing.T) {
 	}
 
 	text := out.String()
-	for _, want := range []string{"Kronos", "Global Flags", "--server", "--token", "--output", "json, pretty, yaml, or table", "--no-color", "server", "agent", "audit", "health", "jobs", "local", "metrics", "schedule", "storage", "target", "config", "version"} {
+	for _, want := range []string{"Kronos", "Global Flags", "--server", "--token", "--output", "--request-id", "json, pretty, yaml, or table", "--no-color", "server", "agent", "audit", "health", "jobs", "local", "metrics", "schedule", "storage", "target", "config", "version"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("help output missing %q:\n%s", want, text)
 		}
@@ -121,7 +121,7 @@ func TestRunGlobalFlagParsingVariants(t *testing.T) {
 	if fmt.Sprint(hoisted) != fmt.Sprint([]string{"version", "--", "--output", "yaml"}) {
 		t.Fatalf("hoistGlobalFlags with -- = %v", hoisted)
 	}
-	if !hasGlobalFlagValue("-output=json", "output") || !hasGlobalFlagValue("--token=abc", "token") || hasGlobalFlagValue("--server=x", "token") {
+	if !hasGlobalFlagValue("-output=json", "output") || !hasGlobalFlagValue("--token=abc", "token") || !hasGlobalFlagValue("--request-id=req-1", "request-id") || hasGlobalFlagValue("--server=x", "token") {
 		t.Fatal("hasGlobalFlagValue returned unexpected result")
 	}
 }
@@ -143,8 +143,8 @@ func TestRunAcceptsGlobalOutputAfterCommand(t *testing.T) {
 func TestHoistGlobalFlagsLeavesServerLocal(t *testing.T) {
 	t.Parallel()
 
-	got := hoistGlobalFlags([]string{"backup", "list", "--server", "http://127.0.0.1:8500", "--output", "yaml", "--token=secret"})
-	want := []string{"--output", "yaml", "--token=secret", "backup", "list", "--server", "http://127.0.0.1:8500"}
+	got := hoistGlobalFlags([]string{"backup", "list", "--server", "http://127.0.0.1:8500", "--output", "yaml", "--token=secret", "--request-id", "req-1"})
+	want := []string{"--output", "yaml", "--token=secret", "--request-id", "req-1", "backup", "list", "--server", "http://127.0.0.1:8500"}
 	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("hoistGlobalFlags() = %#v, want %#v", got, want)
 	}

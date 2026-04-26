@@ -17,6 +17,7 @@ import (
 	"github.com/kronos/kronos/internal/core"
 	kcrypto "github.com/kronos/kronos/internal/crypto"
 	"github.com/kronos/kronos/internal/manifest"
+	"github.com/kronos/kronos/internal/obs"
 	"github.com/kronos/kronos/internal/repository"
 	"github.com/kronos/kronos/internal/storage/local"
 	"github.com/kronos/kronos/internal/verify"
@@ -305,10 +306,19 @@ func controlServerAddr(ctx context.Context, fallback string) string {
 
 func setControlAuth(ctx context.Context, req *http.Request) {
 	token := controlToken(ctx)
-	if token == "" {
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	setControlRequestID(ctx, req)
+}
+
+func setControlRequestID(ctx context.Context, req *http.Request) {
+	if req == nil {
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	if requestID, ok := obs.RequestIDFromContext(ctx); ok {
+		req.Header.Set(obs.RequestIDHeader, requestID)
+	}
 }
 
 func controlToken(ctx context.Context) string {
@@ -344,7 +354,7 @@ func doControlRequest(client *http.Client, req *http.Request, out io.Writer) err
 		return err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("%s %s failed: %s: %s", req.Method, req.URL.Path, resp.Status, strings.TrimSpace(body.String()))
+		return fmt.Errorf("%s %s failed: %s%s: %s", req.Method, req.URL.Path, resp.Status, responseRequestID(resp), strings.TrimSpace(body.String()))
 	}
 	if resp.StatusCode == http.StatusNoContent {
 		return nil
@@ -365,6 +375,16 @@ func doControlRequest(client *http.Client, req *http.Request, out io.Writer) err
 		return err
 	}
 	return nil
+}
+
+func responseRequestID(resp *http.Response) string {
+	if resp == nil {
+		return ""
+	}
+	if requestID := strings.TrimSpace(resp.Header.Get(obs.RequestIDHeader)); requestID != "" {
+		return " request_id=" + requestID
+	}
+	return ""
 }
 
 func controlEndpoint(serverAddr string, apiPath string) (string, error) {

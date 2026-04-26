@@ -9,6 +9,7 @@ database backups. The product brief and build plan live in `.project/`:
 - [Implementation](.project/IMPLEMENTATION.md)
 - [Tasks](.project/TASKS.md)
 - [Branding](.project/BRANDING.md)
+- [Architecture](ARCHITECTURE.md)
 - [Quick start](docs/quickstart.md)
 - [CLI reference](docs/cli.md)
 - [Operations runbook](docs/operations.md)

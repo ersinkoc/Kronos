@@ -20,6 +20,7 @@ import (
 	"github.com/kronos/kronos/internal/core"
 	kcrypto "github.com/kronos/kronos/internal/crypto"
 	"github.com/kronos/kronos/internal/manifest"
+	"github.com/kronos/kronos/internal/obs"
 	"github.com/kronos/kronos/internal/storage/local"
 )
 
@@ -478,6 +479,66 @@ func TestControlRequestsUseKronosTokenEnv(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"ok":true`) {
 		t.Fatalf("output = %q", out.String())
+	}
+}
+
+func TestControlRequestsSendRequestID(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get(obs.RequestIDHeader); got != "req-cli-1" {
+			t.Fatalf("%s = %q, want req-cli-1", obs.RequestIDHeader, got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"ok":true}`)
+	}))
+	defer server.Close()
+
+	var out bytes.Buffer
+	ctx := obs.WithRequestID(context.Background(), "req-cli-1")
+	if err := getControlJSON(ctx, server.Client(), server.URL, "/api/v1/anything", &out); err != nil {
+		t.Fatalf("getControlJSON() error = %v", err)
+	}
+	if !strings.Contains(out.String(), `"ok":true`) {
+		t.Fatalf("output = %q", out.String())
+	}
+}
+
+func TestRunGlobalRequestIDFlag(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get(obs.RequestIDHeader); got != "req-global-1" {
+			t.Fatalf("%s = %q, want req-global-1", obs.RequestIDHeader, got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"backups":[]}`)
+	}))
+	defer server.Close()
+
+	var out bytes.Buffer
+	err := run(context.Background(), &out, []string{"backup", "list", "--server", server.URL, "--request-id", "req-global-1"})
+	if err != nil {
+		t.Fatalf("backup list with --request-id error = %v", err)
+	}
+}
+
+func TestControlRequestErrorIncludesRequestID(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(obs.RequestIDHeader, "req-error-1")
+		http.Error(w, "bad thing", http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	var out bytes.Buffer
+	err := getControlJSON(context.Background(), server.Client(), server.URL, "/api/v1/anything", &out)
+	if err == nil {
+		t.Fatal("getControlJSON() error = nil, want error")
+	}
+	if text := err.Error(); !strings.Contains(text, "request_id=req-error-1") || !strings.Contains(text, "bad thing") {
+		t.Fatalf("getControlJSON() error = %q", text)
 	}
 }
 

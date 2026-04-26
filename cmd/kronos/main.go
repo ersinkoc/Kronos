@@ -8,6 +8,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/kronos/kronos/internal/obs"
 )
 
 type command struct {
@@ -17,10 +19,11 @@ type command struct {
 }
 
 type cliOptions struct {
-	Token  string
-	Server string
-	Output string
-	Color  bool
+	Token     string
+	Server    string
+	Output    string
+	RequestID string
+	Color     bool
 }
 
 type cliOptionsKey struct{}
@@ -39,6 +42,7 @@ func run(ctx context.Context, out io.Writer, args []string) error {
 	server := global.String("server", "", "control-plane server address")
 	token := global.String("token", os.Getenv("KRONOS_TOKEN"), "bearer token for control-plane API requests")
 	output := global.String("output", "json", "output format: json, pretty, yaml, or table")
+	requestID := global.String("request-id", "", "request correlation id to send to the control plane")
 	noColor := global.Bool("no-color", false, "disable colorized output")
 	args = hoistGlobalFlags(args)
 	if err := global.Parse(args); err != nil {
@@ -49,7 +53,12 @@ func run(ctx context.Context, out io.Writer, args []string) error {
 	}
 	args = global.Args()
 	color := colorEnabled(out, *noColor)
-	ctx = context.WithValue(ctx, cliOptionsKey{}, cliOptions{Token: *token, Server: *server, Output: *output, Color: color})
+	ctx = context.WithValue(ctx, cliOptionsKey{}, cliOptions{Token: *token, Server: *server, Output: *output, RequestID: *requestID, Color: color})
+	if strings.TrimSpace(*requestID) != "" {
+		ctx = obs.WithRequestID(ctx, *requestID)
+	} else {
+		ctx = obs.EnsureRequestID(ctx)
+	}
 	if len(args) == 0 {
 		return runHelp(out, commands, color)
 	}
@@ -95,7 +104,11 @@ func hoistGlobalFlags(args []string) []string {
 			hoisted = append(hoisted, arg)
 			continue
 		}
-		if arg == "--output" || arg == "-output" || arg == "--token" || arg == "-token" {
+		if hasGlobalFlagValue(arg, "request-id") {
+			hoisted = append(hoisted, arg)
+			continue
+		}
+		if arg == "--output" || arg == "-output" || arg == "--token" || arg == "-token" || arg == "--request-id" || arg == "-request-id" {
 			hoisted = append(hoisted, arg)
 			if i+1 < len(args) {
 				i++
@@ -244,12 +257,13 @@ func runHelp(out io.Writer, commands map[string]command, color bool) error {
 	fmt.Fprintln(out, colorize("Usage:", ansiCyan, color))
 	fmt.Fprintln(out, "  kronos [global flags] <command> [flags]")
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, "  --output, --token, and --no-color may also be placed with command flags.")
+	fmt.Fprintln(out, "  --output, --token, --request-id, and --no-color may also be placed with command flags.")
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, colorize("Global Flags:", ansiCyan, color))
 	fmt.Fprintln(out, "  --server string   control-plane server address")
 	fmt.Fprintln(out, "  --token string    bearer token for control-plane API requests")
 	fmt.Fprintln(out, "  --output string   output format: json, pretty, yaml, or table")
+	fmt.Fprintln(out, "  --request-id string request correlation id to send to the control plane")
 	fmt.Fprintln(out, "  --no-color        disable colorized output")
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, colorize("Commands:", ansiCyan, color))

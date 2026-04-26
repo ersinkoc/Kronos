@@ -20,6 +20,7 @@ import (
 	"github.com/kronos/kronos/internal/config"
 	"github.com/kronos/kronos/internal/core"
 	"github.com/kronos/kronos/internal/kvstore"
+	"github.com/kronos/kronos/internal/obs"
 	control "github.com/kronos/kronos/internal/server"
 )
 
@@ -45,6 +46,51 @@ func TestServerHealthHandler(t *testing.T) {
 	}
 	if !strings.Contains(body.String(), `"status":"ok"`) || !strings.Contains(body.String(), `"projects":1`) {
 		t.Fatalf("body = %q", body.String())
+	}
+}
+
+func TestServerRequestIDHeader(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(newServerHandler(nil))
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/healthz")
+	if err != nil {
+		t.Fatalf("GET /healthz error = %v", err)
+	}
+	resp.Body.Close()
+	generated := resp.Header.Get(obs.RequestIDHeader)
+	if generated == "" {
+		t.Fatalf("%s header is empty", obs.RequestIDHeader)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/healthz", nil)
+	if err != nil {
+		t.Fatalf("NewRequest() error = %v", err)
+	}
+	req.Header.Set(obs.RequestIDHeader, "req-test-123")
+	resp, err = server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("GET /healthz with request id error = %v", err)
+	}
+	resp.Body.Close()
+	if got := resp.Header.Get(obs.RequestIDHeader); got != "req-test-123" {
+		t.Fatalf("%s = %q, want req-test-123", obs.RequestIDHeader, got)
+	}
+}
+
+func TestAuditMetadataUsesRequestContext(t *testing.T) {
+	t.Parallel()
+
+	req, err := http.NewRequestWithContext(obs.WithRequestID(context.Background(), "req-context-1"), http.MethodPost, "/api/v1/targets", nil)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext() error = %v", err)
+	}
+	req.Header.Set("X-Kronos-Agent-ID", "agent-context")
+	got := auditMetadataWithRequest(req, map[string]any{"resource": "target"})
+	if got["request_id"] != "req-context-1" || got["agent_id"] != "agent-context" || got["resource"] != "target" {
+		t.Fatalf("auditMetadataWithRequest() = %#v", got)
 	}
 }
 
@@ -388,6 +434,8 @@ func TestServerAuditRecordsMutations(t *testing.T) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Kronos-Actor", "admin-1")
+	req.Header.Set("X-Kronos-Agent-ID", "agent-audit")
+	req.Header.Set(obs.RequestIDHeader, "req-audit-1")
 	resp, err := server.Client().Do(req)
 	if err != nil {
 		t.Fatalf("POST target error = %v", err)
@@ -421,6 +469,8 @@ func TestServerAuditRecordsMutations(t *testing.T) {
 		`"action":"target.created"`,
 		`"resource_type":"target"`,
 		`"resource_id":"target-1"`,
+		`"request_id":"req-audit-1"`,
+		`"agent_id":"agent-audit"`,
 		`"action":"backup.requested"`,
 		`"resource_type":"job"`,
 	} {
@@ -533,6 +583,77 @@ func TestServerTokenEndpoints(t *testing.T) {
 	resp.Body.Close()
 	if !strings.Contains(body.String(), `"revoked_at"`) {
 		t.Fatalf("revoke token body = %q", body.String())
+	}
+}
+
+func TestServerAuthVerifyRateLimit(t *testing.T) {
+	t.Parallel()
+
+	db, err := kvstore.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+	stores, err := newAPIStores(db)
+	if err != nil {
+		t.Fatalf("newAPIStores() error = %v", err)
+	}
+	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, stores))
+	defer server.Close()
+
+	for i := 0; i < authVerifyRateLimit; i++ {
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/api/v1/auth/verify", nil)
+		if err != nil {
+			t.Fatalf("NewRequest(%d) error = %v", i, err)
+		}
+		req.Header.Set("Authorization", "Bearer kro_missing_secret")
+		resp, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatalf("POST auth verify %d error = %v", i, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("POST auth verify %d status = %d, want 401", i, resp.StatusCode)
+		}
+	}
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/api/v1/auth/verify", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(rate limited) error = %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer kro_missing_secret")
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("POST auth verify rate limited error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("POST auth verify rate limited status = %d, want 429", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Retry-After"); got == "" {
+		t.Fatal("POST auth verify rate limited Retry-After header is empty")
+	}
+}
+
+func TestAuthRateLimiterPrunesExpiredClients(t *testing.T) {
+	t.Parallel()
+
+	limiter := newAuthRateLimiter(2, time.Minute)
+	now := time.Date(2026, 4, 26, 12, 0, 0, 0, time.UTC)
+	limiter.clients["expired"] = authRateWindow{start: now.Add(-2 * time.Minute), count: 2}
+	limiter.clients["active"] = authRateWindow{start: now.Add(-30 * time.Second), count: 1}
+
+	limiter.mu.Lock()
+	limiter.pruneLocked(now)
+	_, expiredOK := limiter.clients["expired"]
+	_, activeOK := limiter.clients["active"]
+	limiter.mu.Unlock()
+
+	if expiredOK {
+		t.Fatal("expired auth rate limiter client was not pruned")
+	}
+	if !activeOK {
+		t.Fatal("active auth rate limiter client was pruned")
 	}
 }
 

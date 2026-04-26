@@ -21,6 +21,7 @@ import (
 	kcrypto "github.com/kronos/kronos/internal/crypto"
 	"github.com/kronos/kronos/internal/drivers"
 	redisdriver "github.com/kronos/kronos/internal/drivers/redis"
+	"github.com/kronos/kronos/internal/obs"
 	control "github.com/kronos/kronos/internal/server"
 	"github.com/kronos/kronos/internal/storage"
 )
@@ -232,6 +233,9 @@ func postHeartbeat(ctx context.Context, client *http.Client, endpoint string, he
 	req.Header.Set("Content-Type", "application/json")
 	if token = strings.TrimSpace(token); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	if requestID, ok := obs.RequestIDFromContext(ctx); ok {
+		req.Header.Set(obs.RequestIDHeader, requestID)
 	}
 	resp, err := client.Do(req)
 	if err != nil {

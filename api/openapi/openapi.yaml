@@ -5,7 +5,9 @@ info:
   description: >
     Local/no-token mode accepts requests without Authorization. When a bearer
     token is provided, endpoints enforce exact scopes plus resource:*,
-    admin:*, or *.
+    admin:*, or *. Clients may send X-Kronos-Request-ID for request
+    correlation; the control plane echoes it on every response or generates one
+    when omitted.
 servers:
   - url: http://127.0.0.1:8500
 paths:
@@ -144,6 +146,13 @@ paths:
                 $ref: "#/components/schemas/AuthVerifyResponse"
         "401":
           description: Bearer token is missing or invalid
+        "429":
+          description: Too many token verification attempts
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying token verification.
+              schema:
+                type: integer
   /api/v1/tokens:
     get:
       summary: List API tokens
@@ -875,6 +884,11 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+  headers:
+    RequestID:
+      description: Request correlation identifier echoed by the control plane.
+      schema:
+        type: string
   parameters:
     ID:
       name: id

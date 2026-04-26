@@ -39,7 +39,7 @@ func completionCommands(commands map[string]command) []string {
 }
 
 func completionGlobalFlags() []string {
-	return []string{"--no-color", "--output", "--server", "--token"}
+	return []string{"--no-color", "--output", "--request-id", "--server", "--token"}
 }
 
 func completionSubcommands() map[string][]string {

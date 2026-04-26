@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	kaudit "github.com/kronos/kronos/internal/audit"
@@ -29,6 +30,8 @@ import (
 )
 
 const defaultSchedulerInterval = time.Minute
+const authVerifyRateLimit = 10
+const authVerifyRateWindow = time.Minute
 
 func runServer(ctx context.Context, out io.Writer, args []string) error {
 	fs := newFlagSet("server", out)
@@ -245,6 +248,94 @@ type apiStores struct {
 	policies       *control.RetentionPolicyStore
 }
 
+type authRateLimiter struct {
+	mu      sync.Mutex
+	limit   int
+	window  time.Duration
+	clients map[string]authRateWindow
+	ticks   uint64
+}
+
+type authRateWindow struct {
+	start time.Time
+	count int
+}
+
+func newAuthRateLimiter(limit int, window time.Duration) *authRateLimiter {
+	if limit <= 0 {
+		limit = authVerifyRateLimit
+	}
+	if window <= 0 {
+		window = authVerifyRateWindow
+	}
+	return &authRateLimiter{
+		limit:   limit,
+		window:  window,
+		clients: make(map[string]authRateWindow),
+	}
+}
+
+func (l *authRateLimiter) Allow(r *http.Request) bool {
+	if l == nil {
+		return true
+	}
+	key := authRateLimitKey(r)
+	now := time.Now()
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.ticks++
+	if l.ticks%uint64(l.limit) == 0 {
+		l.pruneLocked(now)
+	}
+
+	window := l.clients[key]
+	if window.start.IsZero() || now.Sub(window.start) >= l.window {
+		l.clients[key] = authRateWindow{start: now, count: 1}
+		return true
+	}
+	if window.count >= l.limit {
+		return false
+	}
+	window.count++
+	l.clients[key] = window
+	return true
+}
+
+func (l *authRateLimiter) pruneLocked(now time.Time) {
+	for key, window := range l.clients {
+		if window.start.IsZero() || now.Sub(window.start) >= l.window {
+			delete(l.clients, key)
+		}
+	}
+}
+
+func authRateLimitKey(r *http.Request) string {
+	if r == nil {
+		return "unknown"
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil && host != "" {
+		return host
+	}
+	if r.RemoteAddr != "" {
+		return r.RemoteAddr
+	}
+	return "unknown"
+}
+
+func withRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := strings.TrimSpace(r.Header.Get(obs.RequestIDHeader))
+		if requestID == "" {
+			requestID = obs.NewRequestID()
+			r.Header.Set(obs.RequestIDHeader, requestID)
+		}
+		w.Header().Set(obs.RequestIDHeader, requestID)
+		next.ServeHTTP(w, r.WithContext(obs.WithRequestID(r.Context(), requestID)))
+	})
+}
+
 func newAPIStores(db *kvstore.DB) (apiStores, error) {
 	jobs, err := control.NewJobStore(db)
 	if err != nil {
@@ -457,6 +548,7 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 	if registry == nil {
 		registry = control.NewAgentRegistry(nil, 30*time.Second)
 	}
+	authLimiter := newAuthRateLimiter(authVerifyRateLimit, authVerifyRateWindow)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -560,6 +652,11 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if !authLimiter.Allow(r) {
+			w.Header().Set("Retry-After", strconv.Itoa(int(authVerifyRateWindow/time.Second)))
+			http.Error(w, "too many auth attempts", http.StatusTooManyRequests)
 			return
 		}
 		handleVerifyBearerToken(w, r, stores.tokens)
@@ -994,7 +1091,7 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 		}
 	})
 	mux.Handle("/", webui.Handler())
-	return mux
+	return withRequestID(mux)
 }
 
 func writeJSON(w http.ResponseWriter, value any) {
@@ -1165,6 +1262,7 @@ func appendAuditEvent(r *http.Request, log *kaudit.Log, action string, resourceT
 	if log == nil {
 		return nil
 	}
+	metadata = auditMetadataWithRequest(r, metadata)
 	_, err := log.Append(r.Context(), core.AuditEvent{
 		ActorID:      core.ID(r.Header.Get("X-Kronos-Actor")),
 		Action:       action,
@@ -1173,6 +1271,27 @@ func appendAuditEvent(r *http.Request, log *kaudit.Log, action string, resourceT
 		Metadata:     metadata,
 	})
 	return err
+}
+
+func auditMetadataWithRequest(r *http.Request, metadata map[string]any) map[string]any {
+	out := make(map[string]any, len(metadata)+2)
+	for key, value := range metadata {
+		out[key] = value
+	}
+	if r != nil {
+		if requestID, ok := obs.RequestIDFromContext(r.Context()); ok {
+			out["request_id"] = requestID
+		} else if requestID := strings.TrimSpace(r.Header.Get(obs.RequestIDHeader)); requestID != "" {
+			out["request_id"] = requestID
+		}
+		if agentID := strings.TrimSpace(r.Header.Get("X-Kronos-Agent-ID")); agentID != "" {
+			out["agent_id"] = agentID
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func handleAuditAppendError(w http.ResponseWriter, err error) bool {
