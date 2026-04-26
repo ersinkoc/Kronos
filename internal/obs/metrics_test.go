@@ -83,12 +83,30 @@ func TestWritePrometheusEscapesLabelsAndPropagatesWriterErrors(t *testing.T) {
 		JobsByStatus: map[core.JobStatus]int{
 			core.JobStatus(`bad"value\status`): 1,
 		},
+		BackupsByType: map[core.BackupType]int{
+			core.BackupType(`full"bad\type`): 2,
+		},
+		BackupsByTarget: map[core.ID]int{
+			core.ID(`target"bad\id`): 3,
+		},
+		BackupsBytesByStorage: map[core.ID]int64{
+			core.ID(`storage"bad\id`): 4,
+		},
 	})
 	if err != nil {
 		t.Fatalf("WritePrometheus() error = %v", err)
 	}
 	if !strings.Contains(out.String(), `kronos_jobs{status="bad\\\"value\\\\status"} 1`) {
 		t.Fatalf("escaped metrics = %s", out.String())
+	}
+	for _, want := range []string{
+		`kronos_backups{type="full\\\"bad\\\\type"} 2`,
+		`kronos_backups_by_target{target_id="target\\\"bad\\\\id"} 3`,
+		`kronos_backups_bytes_by_storage{storage_id="storage\\\"bad\\\\id"} 4`,
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("escaped metrics missing %q in %s", want, out.String())
+		}
 	}
 
 	if err := WritePrometheus(failingWriter{}, MetricsSnapshot{}); err == nil {
