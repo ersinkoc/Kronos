@@ -310,7 +310,9 @@ func TestServerMetricsEndpoint(t *testing.T) {
 		t.Fatalf("Append(audit) error = %v", err)
 	}
 	registry := control.NewAgentRegistry(func() time.Time { return now }, time.Minute)
-	registry.Heartbeat(control.AgentHeartbeat{ID: "agent-1", Now: now})
+	registry.Heartbeat(control.AgentHeartbeat{ID: "agent-1", Capacity: 3, Now: now})
+	registry.Heartbeat(control.AgentHeartbeat{ID: "agent-default-capacity", Now: now})
+	registry.Heartbeat(control.AgentHeartbeat{ID: "agent-degraded", Capacity: 9, Now: now.Add(-2 * time.Minute)})
 	server := httptest.NewServer(newServerHandlerWithStores(nil, registry, stores))
 	defer server.Close()
 
@@ -325,7 +327,9 @@ func TestServerMetricsEndpoint(t *testing.T) {
 	}
 	text := body.String()
 	for _, want := range []string{
-		`kronos_agents{status="healthy"} 1`,
+		`kronos_agents{status="healthy"} 2`,
+		`kronos_agents{status="degraded"} 1`,
+		`kronos_agents_capacity 4`,
 		`kronos_jobs{status="queued"} 1`,
 		`kronos_backups_total 1`,
 		`kronos_audit_events_total 1`,

@@ -40,6 +40,9 @@ token reuse, or a larger verification budget.
 Monitor `kronos_audit_events_total` to confirm the audit chain is growing during
 control-plane mutations and scheduled operations.
 
+Monitor `kronos_agents_capacity` to confirm the healthy agent fleet can claim
+the expected number of concurrent jobs.
+
 ## Upgrade
 
 1. Build and test the release artifact:

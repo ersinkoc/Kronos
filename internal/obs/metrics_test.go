@@ -17,6 +17,7 @@ func TestWritePrometheus(t *testing.T) {
 	err := WritePrometheus(&out, MetricsSnapshot{
 		AgentsHealthy:  2,
 		AgentsDegraded: 1,
+		AgentsCapacity: 5,
 		JobsByStatus: map[core.JobStatus]int{
 			core.JobStatusQueued:  3,
 			core.JobStatusRunning: 1,
@@ -32,6 +33,7 @@ func TestWritePrometheus(t *testing.T) {
 	for _, want := range []string{
 		`kronos_agents{status="healthy"} 2`,
 		`kronos_agents{status="degraded"} 1`,
+		`kronos_agents_capacity 5`,
 		`kronos_jobs{status="queued"} 3`,
 		`kronos_jobs{status="running"} 1`,
 		`kronos_backups_total 4`,

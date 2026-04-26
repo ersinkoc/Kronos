@@ -1138,6 +1138,11 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 			switch agent.Status {
 			case control.AgentHealthy:
 				snapshot.AgentsHealthy++
+				capacity := agent.Capacity
+				if capacity <= 0 {
+					capacity = 1
+				}
+				snapshot.AgentsCapacity += capacity
 			case control.AgentDegraded:
 				snapshot.AgentsDegraded++
 			}

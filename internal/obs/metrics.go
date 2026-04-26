@@ -13,6 +13,7 @@ import (
 type MetricsSnapshot struct {
 	AgentsHealthy        int
 	AgentsDegraded       int
+	AgentsCapacity       int
 	JobsByStatus         map[core.JobStatus]int
 	BackupsTotal         int
 	AuditEventsTotal     int
@@ -31,6 +32,15 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "kronos_agents{status=%q} %d\n", "degraded", snapshot.AgentsDegraded); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_agents_capacity Total schedulable capacity across healthy agents."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_agents_capacity gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_agents_capacity %d\n", snapshot.AgentsCapacity); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_jobs Number of jobs by lifecycle status."); err != nil {
