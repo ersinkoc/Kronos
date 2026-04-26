@@ -32,6 +32,7 @@ kronos agent list
 kronos agent inspect --id agent-1
 kronos metrics
 kronos overview
+kronos --output table overview
 kronos local --listen 127.0.0.1:8500
 kronos local --config kronos.yaml --work --manifest-private-key <ed25519-private-key-hex> --chunk-key <32-byte-hex-key> --key-id prod-2026
 ```
