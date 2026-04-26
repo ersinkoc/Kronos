@@ -309,6 +309,30 @@ func TestServerMetricsEndpoint(t *testing.T) {
 	if err := stores.jobs.Save(core.Job{ID: "job-3", Status: core.JobStatusFinalizing, QueuedAt: now, StartedAt: now}); err != nil {
 		t.Fatalf("Save(finalizing job) error = %v", err)
 	}
+	for _, target := range []core.Target{
+		{ID: "target", Name: "redis", Driver: core.TargetDriverRedis, Endpoint: "127.0.0.1:6379"},
+		{ID: "target-archive", Name: "archive", Driver: core.TargetDriverRedis, Endpoint: "127.0.0.1:6380"},
+	} {
+		if err := stores.targets.Save(target); err != nil {
+			t.Fatalf("Save(target %s) error = %v", target.ID, err)
+		}
+	}
+	for _, storage := range []core.Storage{
+		{ID: "storage", Name: "primary", Kind: core.StorageKindLocal, URI: "file:///tmp/kronos-primary"},
+		{ID: "storage-archive", Name: "archive", Kind: core.StorageKindS3, URI: "s3://kronos-archive"},
+	} {
+		if err := stores.storages.Save(storage); err != nil {
+			t.Fatalf("Save(storage %s) error = %v", storage.ID, err)
+		}
+	}
+	for _, schedule := range []core.Schedule{
+		{ID: "schedule-1", Name: "hourly", TargetID: "target", StorageID: "storage", BackupType: core.BackupTypeFull, Expression: "0 * * * *"},
+		{ID: "schedule-2", Name: "paused", TargetID: "target-archive", StorageID: "storage-archive", BackupType: core.BackupTypeIncremental, Expression: "0 2 * * *", Paused: true},
+	} {
+		if err := stores.schedules.Save(schedule); err != nil {
+			t.Fatalf("Save(schedule %s) error = %v", schedule.ID, err)
+		}
+	}
 	if err := stores.backups.Save(core.Backup{ID: "backup-1", TargetID: "target", StorageID: "storage", JobID: "job-1", Type: core.BackupTypeFull, ManifestID: "manifest-1", StartedAt: now.Add(-time.Hour), EndedAt: now, SizeBytes: 2048, ChunkCount: 7, Protected: true}); err != nil {
 		t.Fatalf("Save(backup) error = %v", err)
 	}
@@ -317,6 +341,22 @@ func TestServerMetricsEndpoint(t *testing.T) {
 	}
 	if _, err := stores.audit.Append(context.Background(), core.AuditEvent{Action: "target.created", ResourceType: "target", ResourceID: "target"}); err != nil {
 		t.Fatalf("Append(audit) error = %v", err)
+	}
+	if err := stores.policies.Save(core.RetentionPolicy{ID: "policy-1", Name: "daily", Rules: []core.RetentionRule{{Kind: "count", Params: map[string]any{"n": 7}}}}); err != nil {
+		t.Fatalf("Save(policy) error = %v", err)
+	}
+	if err := stores.users.Save(core.User{ID: "user-1", Email: "admin@example.com", DisplayName: "Admin", Role: core.RoleAdmin}); err != nil {
+		t.Fatalf("Save(user) error = %v", err)
+	}
+	createdToken, err := stores.tokens.Create("metrics", "user-1", []string{"metrics:read"}, time.Now().UTC().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("Create(token) error = %v", err)
+	}
+	if _, err := stores.tokens.Create("active", "user-1", []string{"backup:read"}, time.Now().UTC().Add(time.Hour)); err != nil {
+		t.Fatalf("Create(active token) error = %v", err)
+	}
+	if _, err := stores.tokens.Revoke(createdToken.Token.ID); err != nil {
+		t.Fatalf("Revoke(token) error = %v", err)
 	}
 	registry := control.NewAgentRegistry(func() time.Time { return now }, time.Minute)
 	registry.Heartbeat(control.AgentHeartbeat{ID: "agent-1", Capacity: 3, Now: now})
@@ -339,6 +379,10 @@ func TestServerMetricsEndpoint(t *testing.T) {
 		`kronos_agents{status="healthy"} 2`,
 		`kronos_agents{status="degraded"} 1`,
 		`kronos_agents_capacity 4`,
+		`kronos_targets_total 2`,
+		`kronos_storages_total 2`,
+		`kronos_schedules_total 2`,
+		`kronos_schedules_paused 1`,
 		`kronos_jobs{status="queued"} 1`,
 		`kronos_jobs{status="running"} 1`,
 		`kronos_jobs{status="finalizing"} 1`,
@@ -357,6 +401,10 @@ func TestServerMetricsEndpoint(t *testing.T) {
 		`kronos_backups_bytes_by_storage{storage_id="storage"} 2048`,
 		`kronos_backups_bytes_by_storage{storage_id="storage-archive"} 512`,
 		`kronos_backups_chunks_total 9`,
+		`kronos_retention_policies_total 1`,
+		`kronos_users_total 1`,
+		`kronos_tokens_total 2`,
+		`kronos_tokens_revoked 1`,
 		`kronos_audit_events_total 1`,
 		`kronos_auth_rate_limited_total 0`,
 	} {

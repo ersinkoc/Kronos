@@ -11,22 +11,30 @@ import (
 
 // MetricsSnapshot is a dependency-free Prometheus exposition snapshot.
 type MetricsSnapshot struct {
-	AgentsHealthy         int
-	AgentsDegraded        int
-	AgentsCapacity        int
-	JobsByStatus          map[core.JobStatus]int
-	JobsActive            int
-	BackupsTotal          int
-	BackupsByType         map[core.BackupType]int
-	BackupsByTarget       map[core.ID]int
-	BackupsByStorage      map[core.ID]int
-	BackupsProtected      int
-	BackupsBytesTotal     int64
-	BackupsBytesByTarget  map[core.ID]int64
-	BackupsBytesByStorage map[core.ID]int64
-	BackupsChunksTotal    int
-	AuditEventsTotal      int
-	AuthRateLimitedTotal  uint64
+	AgentsHealthy          int
+	AgentsDegraded         int
+	AgentsCapacity         int
+	TargetsTotal           int
+	StoragesTotal          int
+	SchedulesTotal         int
+	SchedulesPaused        int
+	JobsByStatus           map[core.JobStatus]int
+	JobsActive             int
+	BackupsTotal           int
+	BackupsByType          map[core.BackupType]int
+	BackupsByTarget        map[core.ID]int
+	BackupsByStorage       map[core.ID]int
+	BackupsProtected       int
+	BackupsBytesTotal      int64
+	BackupsBytesByTarget   map[core.ID]int64
+	BackupsBytesByStorage  map[core.ID]int64
+	BackupsChunksTotal     int
+	RetentionPoliciesTotal int
+	UsersTotal             int
+	TokensTotal            int
+	TokensRevoked          int
+	AuditEventsTotal       int
+	AuthRateLimitedTotal   uint64
 }
 
 // WritePrometheus writes metrics in the Prometheus text exposition format.
@@ -50,6 +58,42 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "kronos_agents_capacity %d\n", snapshot.AgentsCapacity); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_targets_total Number of configured backup targets."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_targets_total gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_targets_total %d\n", snapshot.TargetsTotal); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_storages_total Number of configured storage backends."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_storages_total gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_storages_total %d\n", snapshot.StoragesTotal); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_schedules_total Number of configured schedules."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_schedules_total gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_schedules_total %d\n", snapshot.SchedulesTotal); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_schedules_paused Number of configured schedules currently paused."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_schedules_paused gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_schedules_paused %d\n", snapshot.SchedulesPaused); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_jobs Number of jobs by lifecycle status."); err != nil {
@@ -131,6 +175,42 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "kronos_backups_chunks_total %d\n", snapshot.BackupsChunksTotal); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_retention_policies_total Number of configured retention policies."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_retention_policies_total gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_retention_policies_total %d\n", snapshot.RetentionPoliciesTotal); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_users_total Number of configured users."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_users_total gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_users_total %d\n", snapshot.UsersTotal); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_tokens_total Number of API tokens."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_tokens_total gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_tokens_total %d\n", snapshot.TokensTotal); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_tokens_revoked Number of API tokens that have been revoked."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_tokens_revoked gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_tokens_revoked %d\n", snapshot.TokensRevoked); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_audit_events_total Number of audit events stored in the hash chain."); err != nil {

@@ -1153,6 +1153,35 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 			}
 		}
 	}
+	if stores.targets != nil {
+		targets, err := stores.targets.List()
+		if err != nil {
+			http.Error(w, "list targets", http.StatusInternalServerError)
+			return
+		}
+		snapshot.TargetsTotal = len(targets)
+	}
+	if stores.storages != nil {
+		storages, err := stores.storages.List()
+		if err != nil {
+			http.Error(w, "list storages", http.StatusInternalServerError)
+			return
+		}
+		snapshot.StoragesTotal = len(storages)
+	}
+	if stores.schedules != nil {
+		schedules, err := stores.schedules.List()
+		if err != nil {
+			http.Error(w, "list schedules", http.StatusInternalServerError)
+			return
+		}
+		snapshot.SchedulesTotal = len(schedules)
+		for _, schedule := range schedules {
+			if schedule.Paused {
+				snapshot.SchedulesPaused++
+			}
+		}
+	}
 	if stores.jobs != nil {
 		jobs, err := stores.jobs.List()
 		if err != nil {
@@ -1183,6 +1212,35 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 			snapshot.BackupsChunksTotal += backup.ChunkCount
 			if backup.Protected {
 				snapshot.BackupsProtected++
+			}
+		}
+	}
+	if stores.policies != nil {
+		policies, err := stores.policies.List()
+		if err != nil {
+			http.Error(w, "list retention policies", http.StatusInternalServerError)
+			return
+		}
+		snapshot.RetentionPoliciesTotal = len(policies)
+	}
+	if stores.users != nil {
+		users, err := stores.users.List()
+		if err != nil {
+			http.Error(w, "list users", http.StatusInternalServerError)
+			return
+		}
+		snapshot.UsersTotal = len(users)
+	}
+	if stores.tokens != nil {
+		tokens, err := stores.tokens.List()
+		if err != nil {
+			http.Error(w, "list tokens", http.StatusInternalServerError)
+			return
+		}
+		snapshot.TokensTotal = len(tokens)
+		for _, token := range tokens {
+			if !token.RevokedAt.IsZero() {
+				snapshot.TokensRevoked++
 			}
 		}
 	}

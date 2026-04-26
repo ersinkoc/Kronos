@@ -43,6 +43,10 @@ control-plane mutations and scheduled operations.
 Monitor `kronos_agents_capacity` to confirm the healthy agent fleet can claim
 the expected number of concurrent jobs.
 
+Monitor `kronos_targets_total`, `kronos_storages_total`,
+`kronos_schedules_total`, and `kronos_schedules_paused` after config seeding or
+resource CRUD changes to catch missing inventory quickly.
+
 Monitor `kronos_jobs_active` alongside `kronos_agents_capacity` to alert when
 running and finalizing work is saturating the fleet.
 
@@ -65,6 +69,10 @@ distribution before it becomes a capacity problem.
 Monitor `kronos_backups_by_target{target_id="..."}` and
 `kronos_backups_bytes_by_target{target_id="..."}` to catch fast-growing targets
 before they dominate backup windows or retention budgets.
+
+Monitor `kronos_retention_policies_total`, `kronos_users_total`,
+`kronos_tokens_total`, and `kronos_tokens_revoked` to track administrative
+inventory and token cleanup.
 
 ## Upgrade
 

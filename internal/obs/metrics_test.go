@@ -15,9 +15,13 @@ func TestWritePrometheus(t *testing.T) {
 
 	var out bytes.Buffer
 	err := WritePrometheus(&out, MetricsSnapshot{
-		AgentsHealthy:  2,
-		AgentsDegraded: 1,
-		AgentsCapacity: 5,
+		AgentsHealthy:   2,
+		AgentsDegraded:  1,
+		AgentsCapacity:  5,
+		TargetsTotal:    6,
+		StoragesTotal:   7,
+		SchedulesTotal:  8,
+		SchedulesPaused: 2,
 		JobsByStatus: map[core.JobStatus]int{
 			core.JobStatusQueued:  3,
 			core.JobStatusRunning: 1,
@@ -37,9 +41,13 @@ func TestWritePrometheus(t *testing.T) {
 			"storage-a": 3072,
 			"storage-b": 1024,
 		},
-		BackupsChunksTotal:   12,
-		AuditEventsTotal:     6,
-		AuthRateLimitedTotal: 5,
+		BackupsChunksTotal:     12,
+		RetentionPoliciesTotal: 9,
+		UsersTotal:             10,
+		TokensTotal:            11,
+		TokensRevoked:          4,
+		AuditEventsTotal:       6,
+		AuthRateLimitedTotal:   5,
 	})
 	if err != nil {
 		t.Fatalf("WritePrometheus() error = %v", err)
@@ -49,6 +57,10 @@ func TestWritePrometheus(t *testing.T) {
 		`kronos_agents{status="healthy"} 2`,
 		`kronos_agents{status="degraded"} 1`,
 		`kronos_agents_capacity 5`,
+		`kronos_targets_total 6`,
+		`kronos_storages_total 7`,
+		`kronos_schedules_total 8`,
+		`kronos_schedules_paused 2`,
 		`kronos_jobs{status="queued"} 3`,
 		`kronos_jobs{status="running"} 1`,
 		`kronos_jobs_active 2`,
@@ -66,6 +78,10 @@ func TestWritePrometheus(t *testing.T) {
 		`kronos_backups_bytes_by_storage{storage_id="storage-a"} 3072`,
 		`kronos_backups_bytes_by_storage{storage_id="storage-b"} 1024`,
 		`kronos_backups_chunks_total 12`,
+		`kronos_retention_policies_total 9`,
+		`kronos_users_total 10`,
+		`kronos_tokens_total 11`,
+		`kronos_tokens_revoked 4`,
 		`kronos_audit_events_total 6`,
 		`kronos_auth_rate_limited_total 5`,
 	} {
