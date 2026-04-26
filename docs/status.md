@@ -47,8 +47,9 @@ flowchart LR
   creation, inactive token pruning, request IDs, and audit recording for
   mutations.
 - Readiness, health, Prometheus metrics, operations docs, CLI docs, quickstart,
-  architecture docs, multi-platform release artifacts, checksums, container
-  builds, GitHub release publishing, and Kubernetes deployment examples.
+  architecture docs, deployment topology guidance, multi-platform release
+  artifacts, checksums, container builds, GitHub release publishing, and
+  Kubernetes deployment examples.
 
 ## Recent Progress
 
@@ -110,5 +111,5 @@ are:
    agents.
 3. Add notification and hook primitives around job terminal events.
 4. Add signed provenance/SBOM generation to the release workflow.
-5. Extend operations docs with production deployment topologies and alert rule
-   examples.
+5. Add restore-drill scenarios and operator checklists for production
+   rehearsals.

@@ -13,6 +13,7 @@ database backups. The product brief and build plan live in `.project/`:
 - [Quick start](docs/quickstart.md)
 - [CLI reference](docs/cli.md)
 - [Operations runbook](docs/operations.md)
+- [Deployment topologies](docs/deployment-topologies.md)
 - [Project status](docs/status.md)
 - [Kubernetes example](deploy/kubernetes/README.md)
 
