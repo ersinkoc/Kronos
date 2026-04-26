@@ -1024,6 +1024,46 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+	mux.HandleFunc("/api/v1/notifications", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			if !requireScope(w, r, stores.tokens, "notification:read") {
+				return
+			}
+			handleListNotifications(w, stores.notifications)
+		case http.MethodPost:
+			if !requireScope(w, r, stores.tokens, "notification:write") {
+				return
+			}
+			handleCreateNotification(w, r, stores.notifications, stores.audit)
+		default:
+			w.Header().Set("Allow", "GET, POST")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/notifications/", func(w http.ResponseWriter, r *http.Request) {
+		id := core.ID(strings.TrimPrefix(r.URL.Path, "/api/v1/notifications/"))
+		switch r.Method {
+		case http.MethodGet:
+			if !requireScope(w, r, stores.tokens, "notification:read") {
+				return
+			}
+			handleGetNotification(w, stores.notifications, id)
+		case http.MethodPut:
+			if !requireScope(w, r, stores.tokens, "notification:write") {
+				return
+			}
+			handleUpdateNotification(w, r, stores.notifications, stores.audit, id)
+		case http.MethodDelete:
+			if !requireScope(w, r, stores.tokens, "notification:write") {
+				return
+			}
+			handleDeleteNotification(w, r, stores.notifications, stores.audit, id)
+		default:
+			w.Header().Set("Allow", "GET, PUT, DELETE")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	mux.HandleFunc("/api/v1/restore", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
@@ -1850,6 +1890,7 @@ func roleScopes(role core.RoleName) []string {
 			"backup:*",
 			"job:*",
 			"metrics:read",
+			"notification:*",
 			"restore:*",
 			"retention:*",
 			"schedule:read",
@@ -1863,6 +1904,7 @@ func roleScopes(role core.RoleName) []string {
 			"backup:read",
 			"job:read",
 			"metrics:read",
+			"notification:read",
 			"restore:read",
 			"retention:read",
 			"schedule:read",
@@ -2984,6 +3026,122 @@ func handleDeleteRetentionPolicy(w http.ResponseWriter, r *http.Request, store *
 		return
 	}
 	if handleAuditAppendError(w, appendAuditEvent(r, auditLog, "retention_policy.deleted", "retention_policy", id, nil)) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func handleListNotifications(w http.ResponseWriter, store *control.NotificationRuleStore) {
+	if store == nil {
+		writeJSON(w, map[string]any{"notifications": []any{}})
+		return
+	}
+	rules, err := store.List()
+	if err != nil {
+		http.Error(w, "list notifications", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"notifications": rules})
+}
+
+func handleCreateNotification(w http.ResponseWriter, r *http.Request, store *control.NotificationRuleStore, auditLog *kaudit.Log) {
+	if store == nil {
+		http.Error(w, "notification store is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	var rule core.NotificationRule
+	if err := decodeJSONRequest(w, r, &rule); err != nil {
+		http.Error(w, "invalid notification", http.StatusBadRequest)
+		return
+	}
+	now := time.Now().UTC()
+	if rule.ID.IsZero() {
+		id, err := core.NewID(core.RealClock{})
+		if err != nil {
+			http.Error(w, "create notification id", http.StatusInternalServerError)
+			return
+		}
+		rule.ID = id
+	}
+	rule.CreatedAt, rule.UpdatedAt = stampTimes(rule.CreatedAt, now)
+	if err := store.Save(rule); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if handleAuditAppendError(w, appendAuditEvent(r, auditLog, "notification.created", "notification", rule.ID, map[string]any{"events": len(rule.Events)})) {
+		return
+	}
+	writeJSON(w, rule)
+}
+
+func handleGetNotification(w http.ResponseWriter, store *control.NotificationRuleStore, id core.ID) {
+	if store == nil {
+		http.Error(w, "notification store is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	rule, ok, err := store.Get(id)
+	if err != nil {
+		http.Error(w, "get notification", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.NotFound(w, nil)
+		return
+	}
+	writeJSON(w, rule)
+}
+
+func handleUpdateNotification(w http.ResponseWriter, r *http.Request, store *control.NotificationRuleStore, auditLog *kaudit.Log, id core.ID) {
+	if store == nil {
+		http.Error(w, "notification store is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	var rule core.NotificationRule
+	if err := decodeJSONRequest(w, r, &rule); err != nil {
+		http.Error(w, "invalid notification", http.StatusBadRequest)
+		return
+	}
+	existing, ok, err := store.Get(id)
+	if err != nil {
+		http.Error(w, "get notification", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.NotFound(w, nil)
+		return
+	}
+	rule.ID = id
+	if rule.CreatedAt.IsZero() {
+		rule.CreatedAt = existing.CreatedAt
+	}
+	rule.UpdatedAt = time.Now().UTC()
+	if err := store.Save(rule); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if handleAuditAppendError(w, appendAuditEvent(r, auditLog, "notification.updated", "notification", rule.ID, map[string]any{"events": len(rule.Events)})) {
+		return
+	}
+	writeJSON(w, rule)
+}
+
+func handleDeleteNotification(w http.ResponseWriter, r *http.Request, store *control.NotificationRuleStore, auditLog *kaudit.Log, id core.ID) {
+	if store == nil {
+		http.Error(w, "notification store is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if _, ok, err := store.Get(id); err != nil {
+		http.Error(w, "get notification", http.StatusInternalServerError)
+		return
+	} else if !ok {
+		http.NotFound(w, nil)
+		return
+	}
+	if err := store.Delete(id); err != nil {
+		http.Error(w, "delete notification", http.StatusInternalServerError)
+		return
+	}
+	if handleAuditAppendError(w, appendAuditEvent(r, auditLog, "notification.deleted", "notification", id, nil)) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -134,6 +134,15 @@ notification endpoints as production dependencies: use HTTPS, verify signatures,
 keep receiver timeouts short, and make the receiver idempotent because retries
 may be added in later releases.
 
+Notification rules are also manageable through the control-plane API:
+
+```bash
+curl -fsS http://127.0.0.1:8500/api/v1/notifications
+curl -fsS -X POST http://127.0.0.1:8500/api/v1/notifications \
+  -H 'Content-Type: application/json' \
+  -d '{"id":"ops-failures","name":"ops-failures","events":["job.failed"],"webhook_url":"https://hooks.example.com/kronos","enabled":true}'
+```
+
 ## Alert Rule Examples
 
 Use these Prometheus rules as a starting point and tune thresholds to match your

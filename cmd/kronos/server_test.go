@@ -2739,6 +2739,93 @@ func TestServerTargetCRUD(t *testing.T) {
 	}
 }
 
+func TestServerNotificationCRUD(t *testing.T) {
+	t.Parallel()
+
+	db, err := kvstore.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+	stores, err := newAPIStores(db)
+	if err != nil {
+		t.Fatalf("newAPIStores() error = %v", err)
+	}
+	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, stores))
+	defer server.Close()
+
+	resp, err := server.Client().Post(server.URL+"/api/v1/notifications", "application/json", strings.NewReader(`{"id":"notification-1","name":"ops","events":["job.failed"],"webhook_url":"https://hooks.example.com/kronos","secret":"shared","enabled":true}`))
+	if err != nil {
+		t.Fatalf("POST notification error = %v", err)
+	}
+	var body bytes.Buffer
+	if _, err := body.ReadFrom(resp.Body); err != nil {
+		t.Fatalf("ReadFrom(create notification) error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"id":"notification-1"`) || !strings.Contains(body.String(), `"secret":"shared"`) {
+		t.Fatalf("POST notification status=%d body=%q", resp.StatusCode, body.String())
+	}
+
+	resp, err = server.Client().Get(server.URL + "/api/v1/notifications")
+	if err != nil {
+		t.Fatalf("GET notifications error = %v", err)
+	}
+	body.Reset()
+	if _, err := body.ReadFrom(resp.Body); err != nil {
+		t.Fatalf("ReadFrom(list notifications) error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"notifications"`) || !strings.Contains(body.String(), `"notification-1"`) {
+		t.Fatalf("GET notifications status=%d body=%q", resp.StatusCode, body.String())
+	}
+
+	req, err := http.NewRequest(http.MethodPut, server.URL+"/api/v1/notifications/notification-1", strings.NewReader(`{"name":"ops-updated","events":["job.succeeded","job.failed"],"webhook_url":"https://hooks.example.com/updated","enabled":false}`))
+	if err != nil {
+		t.Fatalf("NewRequest(update notification) error = %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("PUT notification error = %v", err)
+	}
+	body.Reset()
+	if _, err := body.ReadFrom(resp.Body); err != nil {
+		t.Fatalf("ReadFrom(update notification) error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"name":"ops-updated"`) || !strings.Contains(body.String(), `"enabled":false`) {
+		t.Fatalf("PUT notification status=%d body=%q", resp.StatusCode, body.String())
+	}
+	got, ok, err := stores.notifications.Get("notification-1")
+	if err != nil || !ok || got.Name != "ops-updated" || got.Enabled {
+		t.Fatalf("Get(notification after update) = %#v ok=%v err=%v", got, ok, err)
+	}
+
+	req, err = http.NewRequest(http.MethodDelete, server.URL+"/api/v1/notifications/notification-1", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(delete notification) error = %v", err)
+	}
+	resp, err = server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("DELETE notification error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("DELETE notification status=%d, want 204", resp.StatusCode)
+	}
+	if _, ok, err := stores.notifications.Get("notification-1"); err != nil || ok {
+		t.Fatalf("Get(deleted notification) ok=%v err=%v, want missing", ok, err)
+	}
+	events, err := stores.audit.List(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("List(audit) error = %v", err)
+	}
+	if len(events) != 3 || events[0].Action != "notification.created" || events[1].Action != "notification.updated" || events[2].Action != "notification.deleted" {
+		t.Fatalf("audit events = %#v", events)
+	}
+}
+
 func TestServerScheduleCRUD(t *testing.T) {
 	t.Parallel()
 

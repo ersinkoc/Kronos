@@ -46,8 +46,8 @@ flowchart LR
 - Token-based authorization with scoped bearer tokens, role-capped token
   creation, inactive token pruning, request IDs, and audit recording for
   mutations.
-- Webhook notification rules for terminal job events, with delivery metadata in
-  the audit chain.
+- Webhook notification rules for terminal job events, API management, optional
+  HMAC payload signatures, and delivery metadata in the audit chain.
 - Readiness, health, Prometheus metrics, operations docs, CLI docs, quickstart,
   architecture docs, deployment topology guidance, restore drill guidance,
   multi-platform release artifacts, checksums, provenance metadata, SBOM
