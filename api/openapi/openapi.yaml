@@ -1080,7 +1080,7 @@ components:
           type: boolean
     OverviewResponse:
       type: object
-      required: [generated_at, agents, inventory, jobs, backups, health]
+      required: [generated_at, agents, inventory, jobs, backups, health, attention]
       properties:
         generated_at:
           type: string
@@ -1144,6 +1144,25 @@ components:
                 type: integer
         health:
           $ref: "#/components/schemas/ReadinessResponse"
+        attention:
+          type: object
+          required:
+            - degraded_agents
+            - failed_jobs
+            - readiness_errors
+            - unprotected_backups
+            - disabled_notification_rules
+          properties:
+            degraded_agents:
+              type: integer
+            failed_jobs:
+              type: integer
+            readiness_errors:
+              type: integer
+            unprotected_backups:
+              type: integer
+            disabled_notification_rules:
+              type: integer
         latest_jobs:
           type: array
           items:

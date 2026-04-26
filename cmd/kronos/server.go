@@ -1456,6 +1456,7 @@ type overviewResponse struct {
 	Jobs          overviewJobs      `json:"jobs"`
 	Backups       overviewBackups   `json:"backups"`
 	Health        readinessResponse `json:"health"`
+	Attention     overviewAttention `json:"attention"`
 	LatestJobs    []core.Job        `json:"latest_jobs,omitempty"`
 	LatestBackups []core.Backup     `json:"latest_backups,omitempty"`
 }
@@ -1490,6 +1491,14 @@ type overviewBackups struct {
 	ByType                   map[core.BackupType]int `json:"by_type"`
 }
 
+type overviewAttention struct {
+	DegradedAgents            int `json:"degraded_agents"`
+	FailedJobs                int `json:"failed_jobs"`
+	ReadinessErrors           int `json:"readiness_errors"`
+	UnprotectedBackups        int `json:"unprotected_backups"`
+	DisabledNotificationRules int `json:"disabled_notification_rules"`
+}
+
 func handleOverview(w http.ResponseWriter, r *http.Request, registry *control.AgentRegistry, stores apiStores) {
 	response := overviewResponse{
 		GeneratedAt: time.Now().UTC(),
@@ -1498,6 +1507,11 @@ func handleOverview(w http.ResponseWriter, r *http.Request, registry *control.Ag
 	}
 	readiness, _ := readinessSnapshot(r.Context(), stores)
 	response.Health = readiness
+	for _, status := range readiness.Checks {
+		if status == "error" {
+			response.Attention.ReadinessErrors++
+		}
+	}
 	if registry != nil {
 		for _, agent := range registry.List() {
 			switch agent.Status {
@@ -1510,6 +1524,7 @@ func handleOverview(w http.ResponseWriter, r *http.Request, registry *control.Ag
 				response.Agents.Capacity += capacity
 			case control.AgentDegraded:
 				response.Agents.Degraded++
+				response.Attention.DegradedAgents++
 			}
 		}
 	}
@@ -1553,6 +1568,9 @@ func handleOverview(w http.ResponseWriter, r *http.Request, registry *control.Ag
 		})
 		for _, job := range jobs {
 			response.Jobs.ByStatus[job.Status]++
+			if job.Status == core.JobStatusFailed {
+				response.Attention.FailedJobs++
+			}
 			if job.Status == core.JobStatusRunning || job.Status == core.JobStatusFinalizing {
 				response.Jobs.Active++
 			}
@@ -1574,6 +1592,8 @@ func handleOverview(w http.ResponseWriter, r *http.Request, registry *control.Ag
 			response.Backups.BytesTotal += backup.SizeBytes
 			if backup.Protected {
 				response.Backups.Protected++
+			} else {
+				response.Attention.UnprotectedBackups++
 			}
 			if completedAt := backup.EndedAt.Unix(); completedAt > response.Backups.LatestCompletedTimestamp {
 				response.Backups.LatestCompletedTimestamp = completedAt
@@ -1599,6 +1619,8 @@ func handleOverview(w http.ResponseWriter, r *http.Request, registry *control.Ag
 		for _, rule := range rules {
 			if rule.Enabled {
 				response.Inventory.NotificationRulesEnabled++
+			} else {
+				response.Attention.DisabledNotificationRules++
 			}
 		}
 	}

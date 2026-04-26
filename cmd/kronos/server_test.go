@@ -540,8 +540,14 @@ func TestServerOverviewEndpoint(t *testing.T) {
 	if err := stores.jobs.Save(core.Job{ID: "job-new", Operation: core.JobOperationBackup, AgentID: "agent-1", Status: core.JobStatusRunning, QueuedAt: now}); err != nil {
 		t.Fatalf("Save(new job) error = %v", err)
 	}
+	if err := stores.jobs.Save(core.Job{ID: "job-failed", Operation: core.JobOperationBackup, Status: core.JobStatusFailed, QueuedAt: now.Add(-30 * time.Minute), EndedAt: now.Add(-20 * time.Minute), Error: "boom"}); err != nil {
+		t.Fatalf("Save(failed job) error = %v", err)
+	}
 	if err := stores.backups.Save(core.Backup{ID: "backup-1", TargetID: "target-1", StorageID: "storage-1", JobID: "job-old", Type: core.BackupTypeFull, ManifestID: "manifest-1", StartedAt: now.Add(-2 * time.Hour), EndedAt: now.Add(-time.Hour), SizeBytes: 1024, ChunkCount: 4, Protected: true}); err != nil {
 		t.Fatalf("Save(backup) error = %v", err)
+	}
+	if err := stores.backups.Save(core.Backup{ID: "backup-2", TargetID: "target-1", StorageID: "storage-1", JobID: "job-new", Type: core.BackupTypeIncremental, ManifestID: "manifest-2", StartedAt: now.Add(-30 * time.Minute), EndedAt: now, SizeBytes: 512, ChunkCount: 2}); err != nil {
+		t.Fatalf("Save(unprotected backup) error = %v", err)
 	}
 	if err := stores.policies.Save(core.RetentionPolicy{ID: "policy-1", Name: "daily", Rules: []core.RetentionRule{{Kind: "count", Params: map[string]any{"n": 7}}}}); err != nil {
 		t.Fatalf("Save(policy) error = %v", err)
@@ -549,11 +555,15 @@ func TestServerOverviewEndpoint(t *testing.T) {
 	if err := stores.notifications.Save(core.NotificationRule{ID: "notification-1", Name: "ops", Events: []core.NotificationEvent{core.NotificationJobFailed}, WebhookURL: "https://hooks.example.com/kronos", Enabled: true}); err != nil {
 		t.Fatalf("Save(notification) error = %v", err)
 	}
+	if err := stores.notifications.Save(core.NotificationRule{ID: "notification-2", Name: "disabled", Events: []core.NotificationEvent{core.NotificationJobFailed}, WebhookURL: "https://hooks.example.com/disabled", Enabled: false}); err != nil {
+		t.Fatalf("Save(disabled notification) error = %v", err)
+	}
 	if err := stores.users.Save(core.User{ID: "user-1", Email: "admin@example.com", DisplayName: "Admin", Role: core.RoleAdmin}); err != nil {
 		t.Fatalf("Save(user) error = %v", err)
 	}
 	registry := control.NewAgentRegistry(func() time.Time { return now }, time.Minute)
 	registry.Heartbeat(control.AgentHeartbeat{ID: "agent-1", Capacity: 2, Now: now})
+	registry.Heartbeat(control.AgentHeartbeat{ID: "agent-degraded", Capacity: 1, Now: now.Add(-2 * time.Minute)})
 	server := httptest.NewServer(newServerHandlerWithStores(nil, registry, stores))
 	defer server.Close()
 
@@ -577,13 +587,15 @@ func TestServerOverviewEndpoint(t *testing.T) {
 		`"schedules_paused":1`,
 		`"active":1`,
 		`"running":1`,
+		`"failed":1`,
 		`"health":{"status":"ok"`,
 		`"jobs":"ok"`,
-		`"bytes_total":1024`,
+		`"attention":{"degraded_agents":1,"failed_jobs":1,"readiness_errors":0,"unprotected_backups":1,"disabled_notification_rules":1}`,
+		`"bytes_total":1536`,
 		`"protected":1`,
 		`"notification_rules_enabled":1`,
 		`"id":"job-new"`,
-		`"id":"backup-1"`,
+		`"id":"backup-2"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("overview missing %q in %s", want, text)
