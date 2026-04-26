@@ -124,6 +124,8 @@ work.
   backup/restore exercises.
 - Store signing keys, chunk keys, bearer tokens, and repository credentials in a
   secret manager rather than plain config files.
+- Apply NetworkPolicy rules around the control plane and agents before exposing
+  the service outside a trusted namespace.
 - Run `kronos ready`, scrape `/metrics`, and alert on backup freshness before
   enabling unattended schedules.
 - Exercise at least one restore path after every material driver, storage, or

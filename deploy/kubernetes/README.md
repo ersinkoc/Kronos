@@ -37,4 +37,6 @@ Before using this in production:
   secret injection.
 - Keep agent `replicas` and `--capacity` aligned with each database target's
   safe backup concurrency.
-- Add NetworkPolicy, TLS termination, and RBAC appropriate for your cluster.
+- Review the included NetworkPolicy and tighten allowed namespaces/pods for
+  your cluster.
+- Add TLS termination and RBAC appropriate for your cluster.
