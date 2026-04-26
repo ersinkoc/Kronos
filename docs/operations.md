@@ -165,8 +165,10 @@ groups:
    ```bash
    make test
    make release-all
+   make provenance
+   make sbom
+   make verify-release
    ./bin/kronos-$(go env GOOS)-$(go env GOARCH) version
-   sha256sum -c ./bin/kronos-$(go env GOOS)-$(go env GOARCH).sha256
    ```
 
    `make release-all` derives version metadata from Git by default. Set

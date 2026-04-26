@@ -43,12 +43,7 @@ jobs:
           VERSION="$VERSION" COMMIT="${COMMIT::12}" BUILD_DATE="$BUILD_DATE" ./scripts/sbom.sh
 
       - name: Verify checksums
-        run: |
-          for checksum in bin/*.sha256; do
-            sha256sum -c "$checksum"
-          done
-          test -s bin/kronos-provenance.json
-          test -s bin/kronos-sbom.json
+        run: ./scripts/verify-release.sh bin
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4

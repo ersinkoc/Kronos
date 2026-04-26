@@ -52,15 +52,14 @@ jobs:
           sh -n scripts/release.sh
           sh -n scripts/provenance.sh
           sh -n scripts/sbom.sh
+          sh -n scripts/verify-release.sh
 
       - name: Build release artifact
         run: |
           RELEASE_TARGETS=linux/amd64 VERSION=ci COMMIT=${GITHUB_SHA::12} BUILD_DATE=1970-01-01T00:00:00Z ./scripts/release.sh
-          sha256sum -c bin/kronos-linux-amd64.sha256
           VERSION=ci COMMIT=${GITHUB_SHA::12} BUILD_DATE=1970-01-01T00:00:00Z ./scripts/provenance.sh
-          test -s bin/kronos-provenance.json
           VERSION=ci COMMIT=${GITHUB_SHA::12} BUILD_DATE=1970-01-01T00:00:00Z ./scripts/sbom.sh
-          test -s bin/kronos-sbom.json
+          ./scripts/verify-release.sh bin
 
       - name: Build container image
         run: |

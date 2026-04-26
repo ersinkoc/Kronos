@@ -86,7 +86,7 @@ func TestReleaseWorkflowPublishesArtifacts(t *testing.T) {
 		"./scripts/release.sh",
 		"./scripts/provenance.sh",
 		"./scripts/sbom.sh",
-		"sha256sum -c",
+		"./scripts/verify-release.sh",
 		"actions/upload-artifact@v4",
 		"gh release create",
 	} {
@@ -102,6 +102,7 @@ func TestReleaseScriptsIncludeProvenance(t *testing.T) {
 	for _, path := range []string{
 		filepath.Join("..", "scripts", "provenance.sh"),
 		filepath.Join("..", "scripts", "sbom.sh"),
+		filepath.Join("..", "scripts", "verify-release.sh"),
 		filepath.Join("..", "Makefile"),
 	} {
 		data, err := os.ReadFile(path)
