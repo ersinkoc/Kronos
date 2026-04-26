@@ -47,6 +47,11 @@ Monitor `kronos_targets_total`, `kronos_storages_total`,
 `kronos_schedules_total`, and `kronos_schedules_paused` after config seeding or
 resource CRUD changes to catch missing inventory quickly.
 
+Monitor `kronos_targets_by_driver{driver="..."}`,
+`kronos_storages_by_kind{kind="..."}`, and
+`kronos_schedules_by_type{type="..."}` to catch inventory mix changes after
+migrations or rollout waves.
+
 Monitor `kronos_jobs_active` alongside `kronos_agents_capacity` to alert when
 running and finalizing work is saturating the fleet.
 

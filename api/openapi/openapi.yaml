@@ -34,6 +34,8 @@ paths:
             kronos_targets_total, kronos_storages_total,
             kronos_schedules_total, and kronos_schedules_paused for
             control-plane inventory,
+            kronos_targets_by_driver, kronos_storages_by_kind, and
+            kronos_schedules_by_type for inventory distribution,
             kronos_backups with type labels for backup mix,
             kronos_backups_by_target and kronos_backups_bytes_by_target for
             target-level distribution,

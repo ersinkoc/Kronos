@@ -15,9 +15,12 @@ type MetricsSnapshot struct {
 	AgentsDegraded         int
 	AgentsCapacity         int
 	TargetsTotal           int
+	TargetsByDriver        map[core.TargetDriver]int
 	StoragesTotal          int
+	StoragesByKind         map[core.StorageKind]int
 	SchedulesTotal         int
 	SchedulesPaused        int
+	SchedulesByType        map[core.BackupType]int
 	JobsByStatus           map[core.JobStatus]int
 	JobsByOperation        map[core.JobOperation]int
 	JobsActive             int
@@ -75,6 +78,11 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 	if _, err := fmt.Fprintf(w, "kronos_targets_total %d\n", snapshot.TargetsTotal); err != nil {
 		return err
 	}
+	if err := writeLabeledGauge(w, "kronos_targets_by_driver", "Number of configured backup targets by driver.", "driver", sortedStringKeys(snapshot.TargetsByDriver), func(driver string) int {
+		return snapshot.TargetsByDriver[core.TargetDriver(driver)]
+	}); err != nil {
+		return err
+	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_storages_total Number of configured storage backends."); err != nil {
 		return err
 	}
@@ -82,6 +90,11 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "kronos_storages_total %d\n", snapshot.StoragesTotal); err != nil {
+		return err
+	}
+	if err := writeLabeledGauge(w, "kronos_storages_by_kind", "Number of configured storage backends by kind.", "kind", sortedStringKeys(snapshot.StoragesByKind), func(kind string) int {
+		return snapshot.StoragesByKind[core.StorageKind(kind)]
+	}); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_schedules_total Number of configured schedules."); err != nil {
@@ -100,6 +113,11 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "kronos_schedules_paused %d\n", snapshot.SchedulesPaused); err != nil {
+		return err
+	}
+	if err := writeLabeledGauge(w, "kronos_schedules_by_type", "Number of configured schedules by backup type.", "type", sortedStringKeys(snapshot.SchedulesByType), func(backupType string) int {
+		return snapshot.SchedulesByType[core.BackupType(backupType)]
+	}); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_jobs Number of jobs by lifecycle status."); err != nil {

@@ -1130,6 +1130,9 @@ func writeJSON(w http.ResponseWriter, value any) {
 
 func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.AgentRegistry, stores apiStores, authLimiter *authRateLimiter) {
 	snapshot := obs.MetricsSnapshot{
+		TargetsByDriver:        make(map[core.TargetDriver]int),
+		StoragesByKind:         make(map[core.StorageKind]int),
+		SchedulesByType:        make(map[core.BackupType]int),
 		JobsByStatus:           make(map[core.JobStatus]int),
 		JobsByOperation:        make(map[core.JobOperation]int),
 		JobsActiveByOperation:  make(map[core.JobOperation]int),
@@ -1164,6 +1167,9 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 			return
 		}
 		snapshot.TargetsTotal = len(targets)
+		for _, target := range targets {
+			snapshot.TargetsByDriver[target.Driver]++
+		}
 	}
 	if stores.storages != nil {
 		storages, err := stores.storages.List()
@@ -1172,6 +1178,9 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 			return
 		}
 		snapshot.StoragesTotal = len(storages)
+		for _, storage := range storages {
+			snapshot.StoragesByKind[storage.Kind]++
+		}
 	}
 	if stores.schedules != nil {
 		schedules, err := stores.schedules.List()
@@ -1181,6 +1190,7 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 		}
 		snapshot.SchedulesTotal = len(schedules)
 		for _, schedule := range schedules {
+			snapshot.SchedulesByType[schedule.BackupType]++
 			if schedule.Paused {
 				snapshot.SchedulesPaused++
 			}

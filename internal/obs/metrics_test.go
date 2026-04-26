@@ -15,13 +15,25 @@ func TestWritePrometheus(t *testing.T) {
 
 	var out bytes.Buffer
 	err := WritePrometheus(&out, MetricsSnapshot{
-		AgentsHealthy:   2,
-		AgentsDegraded:  1,
-		AgentsCapacity:  5,
-		TargetsTotal:    6,
-		StoragesTotal:   7,
+		AgentsHealthy:  2,
+		AgentsDegraded: 1,
+		AgentsCapacity: 5,
+		TargetsTotal:   6,
+		TargetsByDriver: map[core.TargetDriver]int{
+			core.TargetDriverRedis: 6,
+		},
+		StoragesTotal: 7,
+		StoragesByKind: map[core.StorageKind]int{
+			core.StorageKindLocal: 5,
+			core.StorageKindS3:    2,
+		},
 		SchedulesTotal:  8,
 		SchedulesPaused: 2,
+		SchedulesByType: map[core.BackupType]int{
+			core.BackupTypeFull:         3,
+			core.BackupTypeIncremental:  4,
+			core.BackupTypeDifferential: 1,
+		},
 		JobsByStatus: map[core.JobStatus]int{
 			core.JobStatusQueued:  3,
 			core.JobStatusRunning: 1,
@@ -76,9 +88,15 @@ func TestWritePrometheus(t *testing.T) {
 		`kronos_agents{status="degraded"} 1`,
 		`kronos_agents_capacity 5`,
 		`kronos_targets_total 6`,
+		`kronos_targets_by_driver{driver="redis"} 6`,
 		`kronos_storages_total 7`,
+		`kronos_storages_by_kind{kind="local"} 5`,
+		`kronos_storages_by_kind{kind="s3"} 2`,
 		`kronos_schedules_total 8`,
 		`kronos_schedules_paused 2`,
+		`kronos_schedules_by_type{type="diff"} 1`,
+		`kronos_schedules_by_type{type="full"} 3`,
+		`kronos_schedules_by_type{type="incr"} 4`,
 		`kronos_jobs{status="queued"} 3`,
 		`kronos_jobs{status="running"} 1`,
 		`kronos_jobs_by_operation{operation="backup"} 3`,
