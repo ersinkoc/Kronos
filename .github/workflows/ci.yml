@@ -56,5 +56,13 @@ jobs:
           RELEASE_TARGETS=linux/amd64 VERSION=ci COMMIT=${GITHUB_SHA::12} BUILD_DATE=1970-01-01T00:00:00Z ./scripts/release.sh
           sha256sum -c bin/kronos-linux-amd64.sha256
 
+      - name: Build container image
+        run: |
+          docker build \
+            --build-arg VERSION=ci \
+            --build-arg COMMIT=${GITHUB_SHA::12} \
+            --build-arg BUILD_DATE=1970-01-01T00:00:00Z \
+            -t kronos:ci .
+
       - name: Check completion script
         run: ./bin/kronos completion bash | bash -n

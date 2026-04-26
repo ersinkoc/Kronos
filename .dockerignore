@@ -1,0 +1,8 @@
+.git
+.tools
+bin
+bench
+web/node_modules
+web/dist
+web/*.tsbuildinfo
+*.out

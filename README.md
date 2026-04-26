@@ -95,6 +95,16 @@ make ui
 make build
 ```
 
+Container builds use the same stamped metadata:
+
+```bash
+docker build \
+  --build-arg VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)" \
+  --build-arg COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" \
+  --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -t kronos:local .
+```
+
 ## Check
 
 ```bash
