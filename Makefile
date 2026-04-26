@@ -1,4 +1,4 @@
-.PHONY: help build test lint fmt vet vuln bench integration e2e ui release release-all provenance clean check
+.PHONY: help build test lint fmt vet vuln bench integration e2e ui release release-all provenance sbom clean check
 
 BIN := bin/kronos
 GO ?= go
@@ -28,6 +28,7 @@ help:
 		'  release      Build a stamped release binary and checksum' \
 		'  release-all  Build stamped release binaries and checksums for common platforms' \
 		'  provenance   Write release artifact provenance JSON' \
+		'  sbom         Write Go module SBOM JSON' \
 		'  clean        Remove generated artifacts' \
 		'  check        Run fmt check, vet, lint, vuln, tests, build, and script checks'
 
@@ -71,6 +72,9 @@ release-all:
 provenance:
 	VERSION="$(VERSION)" COMMIT="$(COMMIT)" BUILD_DATE="$(BUILD_DATE)" ./scripts/provenance.sh
 
+sbom:
+	GO=$(GO) VERSION="$(VERSION)" COMMIT="$(COMMIT)" BUILD_DATE="$(BUILD_DATE)" ./scripts/sbom.sh
+
 clean:
 	rm -rf bin bench/bench.out
 
@@ -90,5 +94,6 @@ check:
 	sh -n scripts/build.sh
 	sh -n scripts/release.sh
 	sh -n scripts/provenance.sh
+	sh -n scripts/sbom.sh
 	sh -n web/build.sh
 	$(BIN) completion bash | bash -n

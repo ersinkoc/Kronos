@@ -85,6 +85,7 @@ func TestReleaseWorkflowPublishesArtifacts(t *testing.T) {
 		"tags:",
 		"./scripts/release.sh",
 		"./scripts/provenance.sh",
+		"./scripts/sbom.sh",
 		"sha256sum -c",
 		"actions/upload-artifact@v4",
 		"gh release create",
@@ -100,14 +101,16 @@ func TestReleaseScriptsIncludeProvenance(t *testing.T) {
 
 	for _, path := range []string{
 		filepath.Join("..", "scripts", "provenance.sh"),
+		filepath.Join("..", "scripts", "sbom.sh"),
 		filepath.Join("..", "Makefile"),
 	} {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("ReadFile(%s) error = %v", path, err)
 		}
-		if !strings.Contains(string(data), "provenance") {
-			t.Fatalf("%s does not mention provenance", path)
+		text := string(data)
+		if !strings.Contains(text, "provenance") && !strings.Contains(text, "sbom") && !strings.Contains(text, "SBOM") {
+			t.Fatalf("%s does not mention release metadata", path)
 		}
 	}
 }

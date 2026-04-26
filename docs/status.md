@@ -48,8 +48,9 @@ flowchart LR
   mutations.
 - Readiness, health, Prometheus metrics, operations docs, CLI docs, quickstart,
   architecture docs, deployment topology guidance, restore drill guidance,
-  multi-platform release artifacts, checksums, provenance metadata, container
-  builds, GitHub release publishing, and Kubernetes deployment examples.
+  multi-platform release artifacts, checksums, provenance metadata, SBOM
+  metadata, container builds, GitHub release publishing, and Kubernetes
+  deployment examples.
 
 ## Recent Progress
 
@@ -110,5 +111,5 @@ are:
 2. Wire the WebUI to live API endpoints for dashboard state, jobs, backups, and
    agents.
 3. Add notification and hook primitives around job terminal events.
-4. Add signed SBOM generation to the release workflow.
+4. Sign release provenance and SBOM metadata with keyless CI identity.
 5. Extend deployment examples with cloud-specific secret manager integrations.
