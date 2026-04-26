@@ -149,6 +149,30 @@ func (s *TokenStore) Revoke(id core.ID) (core.Token, error) {
 	return record.Token, nil
 }
 
+// PruneInactive deletes token records that are revoked or past expiration.
+func (s *TokenStore) PruneInactive() ([]core.Token, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("token store is closed")
+	}
+	tokens, err := s.List()
+	if err != nil {
+		return nil, err
+	}
+	now := s.clock.Now().UTC()
+	deleted := make([]core.Token, 0)
+	for _, token := range tokens {
+		expired := !token.ExpiresAt.IsZero() && !token.ExpiresAt.After(now)
+		if token.RevokedAt.IsZero() && !expired {
+			continue
+		}
+		if err := deleteKey(s.db, tokensBucket, []byte(token.ID)); err != nil {
+			return deleted, err
+		}
+		deleted = append(deleted, token)
+	}
+	return deleted, nil
+}
+
 // Verify checks a bearer token secret against stored verifier hashes.
 func (s *TokenStore) Verify(secret string) (core.Token, bool, error) {
 	if s == nil || s.db == nil {

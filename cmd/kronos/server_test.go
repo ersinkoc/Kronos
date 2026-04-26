@@ -803,6 +803,26 @@ func TestServerTokenEndpoints(t *testing.T) {
 	if !strings.Contains(body.String(), `"revoked_at"`) {
 		t.Fatalf("revoke token body = %q", body.String())
 	}
+
+	resp, err = server.Client().Post(server.URL+"/api/v1/tokens/prune", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST token prune error = %v", err)
+	}
+	body.Reset()
+	if _, err := body.ReadFrom(resp.Body); err != nil {
+		t.Fatalf("ReadFrom(prune token) error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"deleted":1`) || !strings.Contains(body.String(), tokens[0].ID.String()) {
+		t.Fatalf("prune token status=%d body=%q", resp.StatusCode, body.String())
+	}
+	tokens, err = stores.tokens.List()
+	if err != nil {
+		t.Fatalf("List(tokens after prune) error = %v", err)
+	}
+	if len(tokens) != 0 {
+		t.Fatalf("tokens after prune = %#v, want none", tokens)
+	}
 }
 
 func TestServerAuthVerifyRateLimit(t *testing.T) {

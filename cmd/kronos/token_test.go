@@ -41,6 +41,12 @@ func TestRunTokenCreateListInspectRevoke(t *testing.T) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"id":"token-1","name":"ci","revoked_at":"2026-04-25T12:00:00Z"}`)
+		case "/api/v1/tokens/prune":
+			if r.Method != http.MethodPost {
+				t.Fatalf("token prune method = %s", r.Method)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"deleted":1,"tokens":[{"id":"token-1","name":"ci"}]}`)
 		case "/api/v1/tokens/token-1":
 			if r.Method != http.MethodGet {
 				t.Fatalf("token inspect method = %s", r.Method)
@@ -94,6 +100,13 @@ func TestRunTokenCreateListInspectRevoke(t *testing.T) {
 		t.Fatalf("token revoke output = %q", out.String())
 	}
 	out.Reset()
+	if err := run(context.Background(), &out, []string{"token", "prune", "--server", server.URL}); err != nil {
+		t.Fatalf("token prune error = %v", err)
+	}
+	if !strings.Contains(out.String(), `"deleted":1`) {
+		t.Fatalf("token prune output = %q", out.String())
+	}
+	out.Reset()
 	if err := run(context.Background(), &out, []string{"token", "verify", "--server", server.URL, "--secret", "kro_secret"}); err != nil {
 		t.Fatalf("token verify error = %v", err)
 	}
@@ -142,6 +155,9 @@ func TestRunTokenRequiresFields(t *testing.T) {
 	}
 	if err := run(context.Background(), &out, []string{"token", "revoke"}); err == nil {
 		t.Fatal("token revoke without id error = nil, want error")
+	}
+	if err := run(context.Background(), &out, []string{"token", "prune", "extra"}); err == nil {
+		t.Fatal("token prune extra arg error = nil, want error")
 	}
 	if err := run(context.Background(), &out, []string{"token", "missing"}); err == nil {
 		t.Fatal("token missing error = nil, want error")

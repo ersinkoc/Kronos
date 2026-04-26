@@ -717,6 +717,18 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 	})
 	mux.HandleFunc("/api/v1/tokens/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/tokens/")
+		if path == "prune" {
+			if r.Method != http.MethodPost {
+				w.Header().Set("Allow", http.MethodPost)
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if !requireScope(w, r, stores.tokens, "token:write") {
+				return
+			}
+			handlePruneTokens(w, r, stores.tokens, stores.audit)
+			return
+		}
 		id, action, _ := strings.Cut(path, "/")
 		switch {
 		case r.Method == http.MethodGet && action == "":
@@ -1716,6 +1728,22 @@ func handleRevokeToken(w http.ResponseWriter, r *http.Request, store *control.To
 		return
 	}
 	writeJSON(w, token)
+}
+
+func handlePruneTokens(w http.ResponseWriter, r *http.Request, store *control.TokenStore, auditLog *kaudit.Log) {
+	if store == nil {
+		http.Error(w, "token store is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	deleted, err := store.PruneInactive()
+	if err != nil {
+		http.Error(w, "prune tokens", http.StatusInternalServerError)
+		return
+	}
+	if handleAuditAppendError(w, appendAuditEvent(r, auditLog, "token.pruned", "token", "", map[string]any{"deleted": len(deleted)})) {
+		return
+	}
+	writeJSON(w, map[string]any{"deleted": len(deleted), "tokens": deleted})
 }
 
 func validateTokenUserScopes(users *control.UserStore, userID core.ID, scopes []string) error {

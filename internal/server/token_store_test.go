@@ -90,3 +90,51 @@ func TestTokenStoreRejectsInvalidCreate(t *testing.T) {
 		t.Fatal("Create(expired) error = nil, want error")
 	}
 }
+
+func TestTokenStorePruneInactive(t *testing.T) {
+	t.Parallel()
+
+	db, err := kvstore.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+	clock := core.NewFakeClock(time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC))
+	store, err := NewTokenStore(db, clock)
+	if err != nil {
+		t.Fatalf("NewTokenStore() error = %v", err)
+	}
+	active, err := store.Create("active", "user-1", []string{"backup:read"}, clock.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("Create(active) error = %v", err)
+	}
+	revoked, err := store.Create("revoked", "user-1", []string{"backup:read"}, time.Time{})
+	if err != nil {
+		t.Fatalf("Create(revoked) error = %v", err)
+	}
+	if _, err := store.Revoke(revoked.Token.ID); err != nil {
+		t.Fatalf("Revoke() error = %v", err)
+	}
+	expiring, err := store.Create("expiring", "user-1", []string{"backup:read"}, clock.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatalf("Create(expiring) error = %v", err)
+	}
+	clock.Advance(2 * time.Minute)
+
+	deleted, err := store.PruneInactive()
+	if err != nil {
+		t.Fatalf("PruneInactive() error = %v", err)
+	}
+	if len(deleted) != 2 {
+		t.Fatalf("deleted = %#v, want 2 tokens", deleted)
+	}
+	if _, ok, err := store.Get(active.Token.ID); err != nil || !ok {
+		t.Fatalf("Get(active) ok=%v err=%v, want active token", ok, err)
+	}
+	if _, ok, err := store.Get(revoked.Token.ID); err != nil || ok {
+		t.Fatalf("Get(revoked) ok=%v err=%v, want pruned", ok, err)
+	}
+	if _, ok, err := store.Get(expiring.Token.ID); err != nil || ok {
+		t.Fatalf("Get(expiring) ok=%v err=%v, want pruned", ok, err)
+	}
+}

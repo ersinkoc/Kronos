@@ -56,7 +56,7 @@ func completionSubcommands() map[string][]string {
 		"schedule":   {"add", "inspect", "list", "pause", "remove", "resume", "tick", "update"},
 		"storage":    {"add", "du", "inspect", "list", "remove", "test", "update"},
 		"target":     {"add", "inspect", "list", "remove", "test", "update"},
-		"token":      {"create", "inspect", "list", "revoke", "verify"},
+		"token":      {"create", "inspect", "list", "prune", "revoke", "verify"},
 		"user":       {"add", "grant", "inspect", "list", "remove"},
 	}
 	for _, names := range subcommands {

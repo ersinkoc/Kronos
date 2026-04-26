@@ -23,6 +23,8 @@ func runToken(ctx context.Context, out io.Writer, args []string) error {
 		return runTokenInspect(ctx, out, args[1:])
 	case "list":
 		return runTokenList(ctx, out, args[1:])
+	case "prune":
+		return runTokenPrune(ctx, out, args[1:])
 	case "revoke":
 		return runTokenRevoke(ctx, out, args[1:])
 	case "verify":
@@ -100,6 +102,18 @@ func runTokenRevoke(ctx context.Context, out io.Writer, args []string) error {
 		return fmt.Errorf("--id is required")
 	}
 	return postControlJSON(ctx, http.DefaultClient, *serverAddr, "/api/v1/tokens/"+*id+"/revoke", nil, out)
+}
+
+func runTokenPrune(ctx context.Context, out io.Writer, args []string) error {
+	fs := newFlagSet("token prune", out)
+	serverAddr := fs.String("server", "127.0.0.1:8500", "server address")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("token prune does not accept positional arguments")
+	}
+	return postControlJSON(ctx, http.DefaultClient, *serverAddr, "/api/v1/tokens/prune", nil, out)
 }
 
 func runTokenVerify(ctx context.Context, out io.Writer, args []string) error {

@@ -252,6 +252,16 @@ paths:
                 $ref: "#/components/schemas/Token"
         "404":
           description: Token not found
+  /api/v1/tokens/prune:
+    post:
+      summary: Prune revoked and expired API tokens
+      responses:
+        "200":
+          description: Deleted token metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PruneTokensResponse"
   /api/v1/users:
     get:
       summary: List users
@@ -1063,6 +1073,16 @@ components:
         secret:
           type: string
           description: Copy-once bearer secret. This value is never returned by list or inspect endpoints.
+    PruneTokensResponse:
+      type: object
+      required: [deleted, tokens]
+      properties:
+        deleted:
+          type: integer
+        tokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/Token"
     UsersResponse:
       type: object
       required: [users]

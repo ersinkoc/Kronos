@@ -125,6 +125,7 @@ kronos token verify
 kronos token list
 kronos token inspect --id token-1
 kronos token revoke --id token-1
+kronos token prune
 
 kronos audit list --action backup.requested --resource-type job --since 24h --limit 50
 kronos audit tail --resource-type job --limit 20

@@ -96,6 +96,9 @@ Monitor `kronos_retention_policies_total`, `kronos_users_total`,
 `kronos_tokens_total`, `kronos_tokens_revoked`, and `kronos_tokens_expired` to
 track administrative inventory and token cleanup.
 
+Run `./bin/kronos token prune` after token rotation windows to remove revoked
+or expired token metadata from the control-plane store.
+
 ## Alert Rule Examples
 
 Use these Prometheus rules as a starting point and tune thresholds to match your

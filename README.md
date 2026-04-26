@@ -36,7 +36,7 @@ This repository currently has the Phase 0 foundation in place and active Phase
   backup now/list/inspect/protect/unprotect/verification,
   target/storage add/list/inspect/update/remove, schedule add/list/inspect/pause/resume/remove,
   target test, storage test/du, scheduler tick, jobs list/inspect/cancel/retry, audit
-  list/tail/search/verify, token create/list/inspect/verify/revoke, retention
+  list/tail/search/verify, token create/list/inspect/verify/revoke/prune, retention
   plan/apply/policy add/list/inspect/update/remove, key slot/escrow/rotation helpers,
   restore preview/start,
   user add/list/inspect/remove/grant,
@@ -71,7 +71,7 @@ This repository currently has the Phase 0 foundation in place and active Phase
   policy CRUD and plan/apply with dry-run support
 - restore API: restore preview plans that validate backup parent chains and
   enqueue restore jobs with dry-run and replace-existing restore options
-- token API: scoped API token create/list/verify/revoke with hashed verifier
+- token API: scoped API token create/list/verify/revoke/prune with hashed verifier
   storage and copy-once bearer secret output
 - user API: local user metadata create/list/get/delete plus role grants
 
