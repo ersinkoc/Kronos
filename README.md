@@ -71,7 +71,8 @@ This repository currently has the Phase 0 foundation in place and active Phase
   queued/running/terminal lifecycle transitions and backup metadata capture on
   successful finish
 - REST API: target, storage, schedule CRUD endpoints and manual
-  `POST /api/v1/backups/now`, with a checked OpenAPI spec in `api/openapi/`
+  `POST /api/v1/backups/now`, operations overview at `/api/v1/overview`,
+  with a checked OpenAPI spec in `api/openapi/`
 - backups API: list/inspect/protect/unprotect plus server-side retention
   policy CRUD and plan/apply with dry-run support
 - restore API: restore preview plans that validate backup parent chains and

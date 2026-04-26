@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -663,6 +664,17 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 			return
 		}
 		handleMetrics(w, r, registry, stores, authLimiter, startedAt)
+	})
+	mux.HandleFunc("/api/v1/overview", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if !requireScope(w, r, stores.tokens, "metrics:read") {
+			return
+		}
+		handleOverview(w, r, registry, stores)
 	})
 	mux.HandleFunc("/api/v1/agents/heartbeat", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -1435,6 +1447,181 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 	w.WriteHeader(http.StatusOK)
 	_ = obs.WritePrometheus(w, snapshot)
+}
+
+type overviewResponse struct {
+	GeneratedAt   time.Time         `json:"generated_at"`
+	Agents        overviewAgents    `json:"agents"`
+	Inventory     overviewInventory `json:"inventory"`
+	Jobs          overviewJobs      `json:"jobs"`
+	Backups       overviewBackups   `json:"backups"`
+	LatestJobs    []core.Job        `json:"latest_jobs,omitempty"`
+	LatestBackups []core.Backup     `json:"latest_backups,omitempty"`
+}
+
+type overviewAgents struct {
+	Healthy  int `json:"healthy"`
+	Degraded int `json:"degraded"`
+	Capacity int `json:"capacity"`
+}
+
+type overviewInventory struct {
+	Targets                  int `json:"targets"`
+	Storages                 int `json:"storages"`
+	Schedules                int `json:"schedules"`
+	SchedulesPaused          int `json:"schedules_paused"`
+	RetentionPolicies        int `json:"retention_policies"`
+	NotificationRules        int `json:"notification_rules"`
+	NotificationRulesEnabled int `json:"notification_rules_enabled"`
+	Users                    int `json:"users"`
+}
+
+type overviewJobs struct {
+	Active   int                    `json:"active"`
+	ByStatus map[core.JobStatus]int `json:"by_status"`
+}
+
+type overviewBackups struct {
+	Total                    int                     `json:"total"`
+	Protected                int                     `json:"protected"`
+	BytesTotal               int64                   `json:"bytes_total"`
+	LatestCompletedTimestamp int64                   `json:"latest_completed_timestamp,omitempty"`
+	ByType                   map[core.BackupType]int `json:"by_type"`
+}
+
+func handleOverview(w http.ResponseWriter, r *http.Request, registry *control.AgentRegistry, stores apiStores) {
+	response := overviewResponse{
+		GeneratedAt: time.Now().UTC(),
+		Jobs:        overviewJobs{ByStatus: make(map[core.JobStatus]int)},
+		Backups:     overviewBackups{ByType: make(map[core.BackupType]int)},
+	}
+	if registry != nil {
+		for _, agent := range registry.List() {
+			switch agent.Status {
+			case control.AgentHealthy:
+				response.Agents.Healthy++
+				capacity := agent.Capacity
+				if capacity <= 0 {
+					capacity = 1
+				}
+				response.Agents.Capacity += capacity
+			case control.AgentDegraded:
+				response.Agents.Degraded++
+			}
+		}
+	}
+	if stores.targets != nil {
+		targets, err := stores.targets.List()
+		if err != nil {
+			http.Error(w, "list targets", http.StatusInternalServerError)
+			return
+		}
+		response.Inventory.Targets = len(targets)
+	}
+	if stores.storages != nil {
+		storages, err := stores.storages.List()
+		if err != nil {
+			http.Error(w, "list storages", http.StatusInternalServerError)
+			return
+		}
+		response.Inventory.Storages = len(storages)
+	}
+	if stores.schedules != nil {
+		schedules, err := stores.schedules.List()
+		if err != nil {
+			http.Error(w, "list schedules", http.StatusInternalServerError)
+			return
+		}
+		response.Inventory.Schedules = len(schedules)
+		for _, schedule := range schedules {
+			if schedule.Paused {
+				response.Inventory.SchedulesPaused++
+			}
+		}
+	}
+	if stores.jobs != nil {
+		jobs, err := stores.jobs.List()
+		if err != nil {
+			http.Error(w, "list jobs", http.StatusInternalServerError)
+			return
+		}
+		sort.Slice(jobs, func(i, j int) bool {
+			return jobs[i].QueuedAt.After(jobs[j].QueuedAt)
+		})
+		for _, job := range jobs {
+			response.Jobs.ByStatus[job.Status]++
+			if job.Status == core.JobStatusRunning || job.Status == core.JobStatusFinalizing {
+				response.Jobs.Active++
+			}
+		}
+		response.LatestJobs = limitJobs(jobs, 5)
+	}
+	if stores.backups != nil {
+		backups, err := stores.backups.List()
+		if err != nil {
+			http.Error(w, "list backups", http.StatusInternalServerError)
+			return
+		}
+		sort.Slice(backups, func(i, j int) bool {
+			return backups[i].EndedAt.After(backups[j].EndedAt)
+		})
+		response.Backups.Total = len(backups)
+		for _, backup := range backups {
+			response.Backups.ByType[backup.Type]++
+			response.Backups.BytesTotal += backup.SizeBytes
+			if backup.Protected {
+				response.Backups.Protected++
+			}
+			if completedAt := backup.EndedAt.Unix(); completedAt > response.Backups.LatestCompletedTimestamp {
+				response.Backups.LatestCompletedTimestamp = completedAt
+			}
+		}
+		response.LatestBackups = limitBackups(backups, 5)
+	}
+	if stores.policies != nil {
+		policies, err := stores.policies.List()
+		if err != nil {
+			http.Error(w, "list retention policies", http.StatusInternalServerError)
+			return
+		}
+		response.Inventory.RetentionPolicies = len(policies)
+	}
+	if stores.notifications != nil {
+		rules, err := stores.notifications.List()
+		if err != nil {
+			http.Error(w, "list notification rules", http.StatusInternalServerError)
+			return
+		}
+		response.Inventory.NotificationRules = len(rules)
+		for _, rule := range rules {
+			if rule.Enabled {
+				response.Inventory.NotificationRulesEnabled++
+			}
+		}
+	}
+	if stores.users != nil {
+		users, err := stores.users.List()
+		if err != nil {
+			http.Error(w, "list users", http.StatusInternalServerError)
+			return
+		}
+		response.Inventory.Users = len(users)
+	}
+	writeJSON(w, response)
+}
+
+func limitJobs(jobs []core.Job, limit int) []core.Job {
+	if len(jobs) <= limit {
+		return jobs
+	}
+	return jobs[:limit]
+}
+
+func limitBackups(backups []core.Backup, limit int) []core.Backup {
+	if len(backups) <= limit {
+		return backups
+	}
+	return backups[:limit]
 }
 
 type readinessResponse struct {

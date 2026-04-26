@@ -512,6 +512,83 @@ func TestServerMetricsEndpoint(t *testing.T) {
 	}
 }
 
+func TestServerOverviewEndpoint(t *testing.T) {
+	t.Parallel()
+
+	db, err := kvstore.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+	stores, err := newAPIStores(db)
+	if err != nil {
+		t.Fatalf("newAPIStores() error = %v", err)
+	}
+	now := time.Date(2026, 4, 26, 9, 30, 0, 0, time.UTC)
+	if err := stores.targets.Save(core.Target{ID: "target-1", Name: "redis", Driver: core.TargetDriverRedis, Endpoint: "127.0.0.1:6379"}); err != nil {
+		t.Fatalf("Save(target) error = %v", err)
+	}
+	if err := stores.storages.Save(core.Storage{ID: "storage-1", Name: "local", Kind: core.StorageKindLocal, URI: "file:///tmp/kronos"}); err != nil {
+		t.Fatalf("Save(storage) error = %v", err)
+	}
+	if err := stores.schedules.Save(core.Schedule{ID: "schedule-1", Name: "nightly", TargetID: "target-1", StorageID: "storage-1", BackupType: core.BackupTypeFull, Expression: "0 2 * * *", Paused: true}); err != nil {
+		t.Fatalf("Save(schedule) error = %v", err)
+	}
+	if err := stores.jobs.Save(core.Job{ID: "job-old", Operation: core.JobOperationBackup, Status: core.JobStatusSucceeded, QueuedAt: now.Add(-time.Hour)}); err != nil {
+		t.Fatalf("Save(old job) error = %v", err)
+	}
+	if err := stores.jobs.Save(core.Job{ID: "job-new", Operation: core.JobOperationBackup, AgentID: "agent-1", Status: core.JobStatusRunning, QueuedAt: now}); err != nil {
+		t.Fatalf("Save(new job) error = %v", err)
+	}
+	if err := stores.backups.Save(core.Backup{ID: "backup-1", TargetID: "target-1", StorageID: "storage-1", JobID: "job-old", Type: core.BackupTypeFull, ManifestID: "manifest-1", StartedAt: now.Add(-2 * time.Hour), EndedAt: now.Add(-time.Hour), SizeBytes: 1024, ChunkCount: 4, Protected: true}); err != nil {
+		t.Fatalf("Save(backup) error = %v", err)
+	}
+	if err := stores.policies.Save(core.RetentionPolicy{ID: "policy-1", Name: "daily", Rules: []core.RetentionRule{{Kind: "count", Params: map[string]any{"n": 7}}}}); err != nil {
+		t.Fatalf("Save(policy) error = %v", err)
+	}
+	if err := stores.notifications.Save(core.NotificationRule{ID: "notification-1", Name: "ops", Events: []core.NotificationEvent{core.NotificationJobFailed}, WebhookURL: "https://hooks.example.com/kronos", Enabled: true}); err != nil {
+		t.Fatalf("Save(notification) error = %v", err)
+	}
+	if err := stores.users.Save(core.User{ID: "user-1", Email: "admin@example.com", DisplayName: "Admin", Role: core.RoleAdmin}); err != nil {
+		t.Fatalf("Save(user) error = %v", err)
+	}
+	registry := control.NewAgentRegistry(func() time.Time { return now }, time.Minute)
+	registry.Heartbeat(control.AgentHeartbeat{ID: "agent-1", Capacity: 2, Now: now})
+	server := httptest.NewServer(newServerHandlerWithStores(nil, registry, stores))
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/api/v1/overview")
+	if err != nil {
+		t.Fatalf("GET overview error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET overview status = %d, want 200", resp.StatusCode)
+	}
+	var body bytes.Buffer
+	if _, err := body.ReadFrom(resp.Body); err != nil {
+		t.Fatalf("ReadFrom(overview) error = %v", err)
+	}
+	text := body.String()
+	for _, want := range []string{
+		`"healthy":1`,
+		`"capacity":2`,
+		`"targets":1`,
+		`"schedules_paused":1`,
+		`"active":1`,
+		`"running":1`,
+		`"bytes_total":1024`,
+		`"protected":1`,
+		`"notification_rules_enabled":1`,
+		`"id":"job-new"`,
+		`"id":"backup-1"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("overview missing %q in %s", want, text)
+		}
+	}
+}
+
 func TestServerMetricsReturnsErrorWhenAuditStoreFails(t *testing.T) {
 	t.Parallel()
 

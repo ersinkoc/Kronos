@@ -76,6 +76,16 @@ paths:
             text/plain:
               schema:
                 type: string
+  /api/v1/overview:
+    get:
+      summary: Operations overview
+      responses:
+        "200":
+          description: Aggregated dashboard counts and latest activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OverviewResponse"
   /api/v1/agents:
     get:
       summary: List agents
@@ -1068,6 +1078,78 @@ components:
       properties:
         ok:
           type: boolean
+    OverviewResponse:
+      type: object
+      required: [generated_at, agents, inventory, jobs, backups]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        agents:
+          type: object
+          required: [healthy, degraded, capacity]
+          properties:
+            healthy:
+              type: integer
+            degraded:
+              type: integer
+            capacity:
+              type: integer
+        inventory:
+          type: object
+          properties:
+            targets:
+              type: integer
+            storages:
+              type: integer
+            schedules:
+              type: integer
+            schedules_paused:
+              type: integer
+            retention_policies:
+              type: integer
+            notification_rules:
+              type: integer
+            notification_rules_enabled:
+              type: integer
+            users:
+              type: integer
+        jobs:
+          type: object
+          required: [active, by_status]
+          properties:
+            active:
+              type: integer
+            by_status:
+              type: object
+              additionalProperties:
+                type: integer
+        backups:
+          type: object
+          required: [total, protected, bytes_total, by_type]
+          properties:
+            total:
+              type: integer
+            protected:
+              type: integer
+            bytes_total:
+              type: integer
+              format: int64
+            latest_completed_timestamp:
+              type: integer
+              format: int64
+            by_type:
+              type: object
+              additionalProperties:
+                type: integer
+        latest_jobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+        latest_backups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Backup"
     AgentSnapshot:
       type: object
       required: [id, last_heartbeat, status]

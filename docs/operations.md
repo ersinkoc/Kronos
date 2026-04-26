@@ -109,6 +109,10 @@ Run `./bin/kronos token prune --dry-run` after token rotation windows to preview
 revoked or expired token metadata, then `./bin/kronos token prune` to remove it
 from the control-plane store.
 
+For dashboard integrations, use `GET /api/v1/overview` to fetch a compact JSON
+summary of agent capacity, inventory counts, active job counts, backup totals,
+and the latest jobs/backups without scraping Prometheus text output.
+
 ## Notifications
 
 Kronos can post webhook notifications when jobs reach a terminal state. Configure

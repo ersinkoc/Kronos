@@ -49,6 +49,8 @@ flowchart LR
 - Webhook notification rules for terminal job events, API management, optional
   HMAC payload signatures, bounded retries, and delivery metadata in the audit
   chain.
+- Dashboard-oriented operations overview API with inventory counts, active job
+  state, backup totals, and latest activity slices.
 - Readiness, health, Prometheus metrics, operations docs, CLI docs, quickstart,
   architecture docs, deployment topology guidance, restore drill guidance,
   multi-platform release artifacts, checksums, provenance metadata, SBOM
