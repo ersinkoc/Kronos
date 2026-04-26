@@ -306,6 +306,9 @@ func TestServerMetricsEndpoint(t *testing.T) {
 	if err := stores.backups.Save(core.Backup{ID: "backup-1", TargetID: "target", StorageID: "storage", JobID: "job-1", Type: core.BackupTypeFull, ManifestID: "manifest-1", StartedAt: now.Add(-time.Hour), EndedAt: now}); err != nil {
 		t.Fatalf("Save(backup) error = %v", err)
 	}
+	if _, err := stores.audit.Append(context.Background(), core.AuditEvent{Action: "target.created", ResourceType: "target", ResourceID: "target"}); err != nil {
+		t.Fatalf("Append(audit) error = %v", err)
+	}
 	registry := control.NewAgentRegistry(func() time.Time { return now }, time.Minute)
 	registry.Heartbeat(control.AgentHeartbeat{ID: "agent-1", Now: now})
 	server := httptest.NewServer(newServerHandlerWithStores(nil, registry, stores))
@@ -325,11 +328,46 @@ func TestServerMetricsEndpoint(t *testing.T) {
 		`kronos_agents{status="healthy"} 1`,
 		`kronos_jobs{status="queued"} 1`,
 		`kronos_backups_total 1`,
+		`kronos_audit_events_total 1`,
 		`kronos_auth_rate_limited_total 0`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("metrics missing %q in %s", want, text)
 		}
+	}
+}
+
+func TestServerMetricsReturnsErrorWhenAuditStoreFails(t *testing.T) {
+	t.Parallel()
+
+	db, err := kvstore.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	auditLog, err := kaudit.New(db, core.NewFakeClock(time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)))
+	if err != nil {
+		t.Fatalf("audit.New() error = %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, apiStores{audit: auditLog}))
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/metrics")
+	if err != nil {
+		t.Fatalf("GET metrics error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("GET metrics status = %d, want 500", resp.StatusCode)
+	}
+	var body bytes.Buffer
+	if _, err := body.ReadFrom(resp.Body); err != nil {
+		t.Fatalf("ReadFrom(metrics) error = %v", err)
+	}
+	if !strings.Contains(body.String(), "list audit events") {
+		t.Fatalf("metrics error body = %q", body.String())
 	}
 }
 

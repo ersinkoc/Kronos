@@ -15,6 +15,7 @@ type MetricsSnapshot struct {
 	AgentsDegraded       int
 	JobsByStatus         map[core.JobStatus]int
 	BackupsTotal         int
+	AuditEventsTotal     int
 	AuthRateLimitedTotal uint64
 }
 
@@ -55,6 +56,15 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "kronos_backups_total %d\n", snapshot.BackupsTotal); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_audit_events_total Number of audit events stored in the hash chain."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_audit_events_total gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_audit_events_total %d\n", snapshot.AuditEventsTotal); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_auth_rate_limited_total Number of auth verification requests rejected by rate limiting."); err != nil {

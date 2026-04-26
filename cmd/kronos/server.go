@@ -601,7 +601,7 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 		if !requireScope(w, r, stores.tokens, "metrics:read") {
 			return
 		}
-		handleMetrics(w, registry, stores, authLimiter)
+		handleMetrics(w, r, registry, stores, authLimiter)
 	})
 	mux.HandleFunc("/api/v1/agents/heartbeat", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -1128,7 +1128,7 @@ func writeJSON(w http.ResponseWriter, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 
-func handleMetrics(w http.ResponseWriter, registry *control.AgentRegistry, stores apiStores, authLimiter *authRateLimiter) {
+func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.AgentRegistry, stores apiStores, authLimiter *authRateLimiter) {
 	snapshot := obs.MetricsSnapshot{
 		JobsByStatus:         make(map[core.JobStatus]int),
 		AuthRateLimitedTotal: authLimiter.LimitedTotal(),
@@ -1160,6 +1160,14 @@ func handleMetrics(w http.ResponseWriter, registry *control.AgentRegistry, store
 			return
 		}
 		snapshot.BackupsTotal = len(backups)
+	}
+	if stores.audit != nil {
+		events, err := stores.audit.List(r.Context(), 0)
+		if err != nil {
+			http.Error(w, "list audit events", http.StatusInternalServerError)
+			return
+		}
+		snapshot.AuditEventsTotal = len(events)
 	}
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 	w.WriteHeader(http.StatusOK)

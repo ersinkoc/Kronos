@@ -37,6 +37,9 @@ Monitor `kronos_auth_rate_limited_total` on `/metrics` for rejected token
 verification attempts. A steady increase usually means callers need backoff,
 token reuse, or a larger verification budget.
 
+Monitor `kronos_audit_events_total` to confirm the audit chain is growing during
+control-plane mutations and scheduled operations.
+
 ## Upgrade
 
 1. Build and test the release artifact:

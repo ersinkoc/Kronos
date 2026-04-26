@@ -22,6 +22,7 @@ func TestWritePrometheus(t *testing.T) {
 			core.JobStatusRunning: 1,
 		},
 		BackupsTotal:         4,
+		AuditEventsTotal:     6,
 		AuthRateLimitedTotal: 5,
 	})
 	if err != nil {
@@ -34,6 +35,7 @@ func TestWritePrometheus(t *testing.T) {
 		`kronos_jobs{status="queued"} 3`,
 		`kronos_jobs{status="running"} 1`,
 		`kronos_backups_total 4`,
+		`kronos_audit_events_total 6`,
 		`kronos_auth_rate_limited_total 5`,
 	} {
 		if !strings.Contains(text, want) {
