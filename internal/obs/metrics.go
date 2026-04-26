@@ -29,6 +29,9 @@ type MetricsSnapshot struct {
 	BackupsBytesByTarget   map[core.ID]int64
 	BackupsBytesByStorage  map[core.ID]int64
 	BackupsChunksTotal     int
+	BackupsLatestCompleted int64
+	BackupsLatestByTarget  map[core.ID]int64
+	BackupsLatestByStorage map[core.ID]int64
 	RetentionPoliciesTotal int
 	UsersTotal             int
 	TokensTotal            int
@@ -175,6 +178,25 @@ func WritePrometheus(w io.Writer, snapshot MetricsSnapshot) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "kronos_backups_chunks_total %d\n", snapshot.BackupsChunksTotal); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# HELP kronos_backups_latest_completed_timestamp Unix timestamp of the latest completed backup metadata record."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE kronos_backups_latest_completed_timestamp gauge"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "kronos_backups_latest_completed_timestamp %d\n", snapshot.BackupsLatestCompleted); err != nil {
+		return err
+	}
+	if err := writeLabeledGauge(w, "kronos_backups_latest_completed_by_target_timestamp", "Unix timestamp of the latest completed backup metadata record by target ID.", "target_id", sortedStringKeys(snapshot.BackupsLatestByTarget), func(targetID string) int64 {
+		return snapshot.BackupsLatestByTarget[core.ID(targetID)]
+	}); err != nil {
+		return err
+	}
+	if err := writeLabeledGauge(w, "kronos_backups_latest_completed_by_storage_timestamp", "Unix timestamp of the latest completed backup metadata record by storage ID.", "storage_id", sortedStringKeys(snapshot.BackupsLatestByStorage), func(storageID string) int64 {
+		return snapshot.BackupsLatestByStorage[core.ID(storageID)]
+	}); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, "# HELP kronos_retention_policies_total Number of configured retention policies."); err != nil {

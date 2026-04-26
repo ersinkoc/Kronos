@@ -39,6 +39,8 @@ paths:
             storage-level distribution,
             kronos_backups_bytes_total for logical backup bytes,
             kronos_backups_chunks_total for chunk volume,
+            kronos_backups_latest_completed_timestamp plus target and storage
+            labels for backup freshness,
             kronos_backups_protected for retention-protected backups,
             kronos_retention_policies_total, kronos_users_total,
             kronos_tokens_total, and kronos_tokens_revoked for administrative

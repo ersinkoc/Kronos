@@ -70,6 +70,10 @@ Monitor `kronos_backups_by_target{target_id="..."}` and
 `kronos_backups_bytes_by_target{target_id="..."}` to catch fast-growing targets
 before they dominate backup windows or retention budgets.
 
+Monitor `kronos_backups_latest_completed_timestamp` and the target/storage
+labeled freshness metrics to catch stalled backup coverage before restores are
+needed.
+
 Monitor `kronos_retention_policies_total`, `kronos_users_total`,
 `kronos_tokens_total`, and `kronos_tokens_revoked` to track administrative
 inventory and token cleanup.

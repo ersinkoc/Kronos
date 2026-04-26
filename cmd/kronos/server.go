@@ -1130,13 +1130,15 @@ func writeJSON(w http.ResponseWriter, value any) {
 
 func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.AgentRegistry, stores apiStores, authLimiter *authRateLimiter) {
 	snapshot := obs.MetricsSnapshot{
-		JobsByStatus:          make(map[core.JobStatus]int),
-		BackupsByType:         make(map[core.BackupType]int),
-		BackupsByTarget:       make(map[core.ID]int),
-		BackupsByStorage:      make(map[core.ID]int),
-		BackupsBytesByTarget:  make(map[core.ID]int64),
-		BackupsBytesByStorage: make(map[core.ID]int64),
-		AuthRateLimitedTotal:  authLimiter.LimitedTotal(),
+		JobsByStatus:           make(map[core.JobStatus]int),
+		BackupsByType:          make(map[core.BackupType]int),
+		BackupsByTarget:        make(map[core.ID]int),
+		BackupsByStorage:       make(map[core.ID]int),
+		BackupsBytesByTarget:   make(map[core.ID]int64),
+		BackupsBytesByStorage:  make(map[core.ID]int64),
+		BackupsLatestByTarget:  make(map[core.ID]int64),
+		BackupsLatestByStorage: make(map[core.ID]int64),
+		AuthRateLimitedTotal:   authLimiter.LimitedTotal(),
 	}
 	if registry != nil {
 		for _, agent := range registry.List() {
@@ -1210,6 +1212,16 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 			snapshot.BackupsBytesByTarget[backup.TargetID] += backup.SizeBytes
 			snapshot.BackupsBytesByStorage[backup.StorageID] += backup.SizeBytes
 			snapshot.BackupsChunksTotal += backup.ChunkCount
+			completedAt := backup.EndedAt.Unix()
+			if completedAt > snapshot.BackupsLatestCompleted {
+				snapshot.BackupsLatestCompleted = completedAt
+			}
+			if completedAt > snapshot.BackupsLatestByTarget[backup.TargetID] {
+				snapshot.BackupsLatestByTarget[backup.TargetID] = completedAt
+			}
+			if completedAt > snapshot.BackupsLatestByStorage[backup.StorageID] {
+				snapshot.BackupsLatestByStorage[backup.StorageID] = completedAt
+			}
 			if backup.Protected {
 				snapshot.BackupsProtected++
 			}
