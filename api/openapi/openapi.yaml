@@ -676,6 +676,11 @@ paths:
   /api/v1/notifications:
     get:
       summary: List notification rules
+      parameters:
+        - $ref: "#/components/parameters/IncludeSecrets"
+      description: >
+        Returns redacted webhook secrets by default. `include_secrets=true`
+        requires `notification:write` in addition to `notification:read`.
       responses:
         "200":
           description: Notification rule list
@@ -705,6 +710,10 @@ paths:
       summary: Get notification rule
       parameters:
         - $ref: "#/components/parameters/ID"
+        - $ref: "#/components/parameters/IncludeSecrets"
+      description: >
+        Returns redacted webhook secrets by default. `include_secrets=true`
+        requires `notification:write` in addition to `notification:read`.
       responses:
         "200":
           description: Notification rule
@@ -1608,7 +1617,7 @@ components:
           format: uri
         secret:
           type: string
-          description: Optional HMAC signing secret. Returned only to authorized callers.
+          description: Optional HMAC signing secret. Redacted unless include_secrets=true is authorized.
         enabled:
           type: boolean
         created_at:

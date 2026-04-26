@@ -143,6 +143,10 @@ curl -fsS -X POST http://127.0.0.1:8500/api/v1/notifications \
   -d '{"id":"ops-failures","name":"ops-failures","events":["job.failed"],"webhook_url":"https://hooks.example.com/kronos","enabled":true}'
 ```
 
+Notification secrets are redacted from API and CLI output by default. Use
+`include_secrets=true` only for controlled break-glass inspection paths that
+also have `notification:write`.
+
 ## Alert Rule Examples
 
 Use these Prometheus rules as a starting point and tune thresholds to match your

@@ -1030,7 +1030,10 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 			if !requireScope(w, r, stores.tokens, "notification:read") {
 				return
 			}
-			handleListNotifications(w, stores.notifications)
+			if wantsSecrets(r) && !requireScope(w, r, stores.tokens, "notification:write") {
+				return
+			}
+			handleListNotifications(w, r, stores.notifications)
 		case http.MethodPost:
 			if !requireScope(w, r, stores.tokens, "notification:write") {
 				return
@@ -1048,7 +1051,10 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 			if !requireScope(w, r, stores.tokens, "notification:read") {
 				return
 			}
-			handleGetNotification(w, stores.notifications, id)
+			if wantsSecrets(r) && !requireScope(w, r, stores.tokens, "notification:write") {
+				return
+			}
+			handleGetNotification(w, r, stores.notifications, id)
 		case http.MethodPut:
 			if !requireScope(w, r, stores.tokens, "notification:write") {
 				return
@@ -3031,7 +3037,7 @@ func handleDeleteRetentionPolicy(w http.ResponseWriter, r *http.Request, store *
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func handleListNotifications(w http.ResponseWriter, store *control.NotificationRuleStore) {
+func handleListNotifications(w http.ResponseWriter, r *http.Request, store *control.NotificationRuleStore) {
 	if store == nil {
 		writeJSON(w, map[string]any{"notifications": []any{}})
 		return
@@ -3040,6 +3046,11 @@ func handleListNotifications(w http.ResponseWriter, store *control.NotificationR
 	if err != nil {
 		http.Error(w, "list notifications", http.StatusInternalServerError)
 		return
+	}
+	if !wantsSecrets(r) {
+		for i := range rules {
+			rules[i] = redactNotification(rules[i])
+		}
 	}
 	writeJSON(w, map[string]any{"notifications": rules})
 }
@@ -3071,10 +3082,10 @@ func handleCreateNotification(w http.ResponseWriter, r *http.Request, store *con
 	if handleAuditAppendError(w, appendAuditEvent(r, auditLog, "notification.created", "notification", rule.ID, map[string]any{"events": len(rule.Events)})) {
 		return
 	}
-	writeJSON(w, rule)
+	writeJSON(w, redactNotification(rule))
 }
 
-func handleGetNotification(w http.ResponseWriter, store *control.NotificationRuleStore, id core.ID) {
+func handleGetNotification(w http.ResponseWriter, r *http.Request, store *control.NotificationRuleStore, id core.ID) {
 	if store == nil {
 		http.Error(w, "notification store is not configured", http.StatusServiceUnavailable)
 		return
@@ -3087,6 +3098,9 @@ func handleGetNotification(w http.ResponseWriter, store *control.NotificationRul
 	if !ok {
 		http.NotFound(w, nil)
 		return
+	}
+	if !wantsSecrets(r) {
+		rule = redactNotification(rule)
 	}
 	writeJSON(w, rule)
 }
@@ -3122,7 +3136,7 @@ func handleUpdateNotification(w http.ResponseWriter, r *http.Request, store *con
 	if handleAuditAppendError(w, appendAuditEvent(r, auditLog, "notification.updated", "notification", rule.ID, map[string]any{"events": len(rule.Events)})) {
 		return
 	}
-	writeJSON(w, rule)
+	writeJSON(w, redactNotification(rule))
 }
 
 func handleDeleteNotification(w http.ResponseWriter, r *http.Request, store *control.NotificationRuleStore, auditLog *kaudit.Log, id core.ID) {
@@ -3159,6 +3173,13 @@ func redactTarget(target core.Target) core.Target {
 func redactStorage(storage core.Storage) core.Storage {
 	storage.Options = redactOptions(storage.Options)
 	return storage
+}
+
+func redactNotification(rule core.NotificationRule) core.NotificationRule {
+	if rule.Secret != "" {
+		rule.Secret = "***REDACTED***"
+	}
+	return rule
 }
 
 func redactOptions(options map[string]any) map[string]any {

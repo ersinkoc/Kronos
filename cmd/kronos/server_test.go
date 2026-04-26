@@ -2763,7 +2763,7 @@ func TestServerNotificationCRUD(t *testing.T) {
 		t.Fatalf("ReadFrom(create notification) error = %v", err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"id":"notification-1"`) || !strings.Contains(body.String(), `"secret":"shared"`) {
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"id":"notification-1"`) || !strings.Contains(body.String(), `"secret":"***REDACTED***"`) || strings.Contains(body.String(), `"secret":"shared"`) {
 		t.Fatalf("POST notification status=%d body=%q", resp.StatusCode, body.String())
 	}
 
@@ -2776,8 +2776,21 @@ func TestServerNotificationCRUD(t *testing.T) {
 		t.Fatalf("ReadFrom(list notifications) error = %v", err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"notifications"`) || !strings.Contains(body.String(), `"notification-1"`) {
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"notifications"`) || !strings.Contains(body.String(), `"notification-1"`) || !strings.Contains(body.String(), `"secret":"***REDACTED***"`) || strings.Contains(body.String(), `"secret":"shared"`) {
 		t.Fatalf("GET notifications status=%d body=%q", resp.StatusCode, body.String())
+	}
+
+	resp, err = server.Client().Get(server.URL + "/api/v1/notifications/notification-1?include_secrets=true")
+	if err != nil {
+		t.Fatalf("GET notification with secrets error = %v", err)
+	}
+	body.Reset()
+	if _, err := body.ReadFrom(resp.Body); err != nil {
+		t.Fatalf("ReadFrom(notification secrets) error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"secret":"shared"`) {
+		t.Fatalf("GET notification secrets status=%d body=%q", resp.StatusCode, body.String())
 	}
 
 	req, err := http.NewRequest(http.MethodPut, server.URL+"/api/v1/notifications/notification-1", strings.NewReader(`{"name":"ops-updated","events":["job.succeeded","job.failed"],"webhook_url":"https://hooks.example.com/updated","enabled":false}`))
