@@ -1084,6 +1084,18 @@ func TestServerTokenEndpoints(t *testing.T) {
 		t.Fatalf("List(tokens after dry-run) tokens=%#v err=%v, want token retained", tokens, err)
 	}
 
+	resp, err = server.Client().Post(server.URL+"/api/v1/tokens/prune", "application/json", strings.NewReader(`{"unexpected":true}`))
+	if err != nil {
+		t.Fatalf("POST token prune unknown field error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("POST token prune unknown field status = %d, want 400", resp.StatusCode)
+	}
+	if tokens, err = stores.tokens.List(); err != nil || len(tokens) != 1 {
+		t.Fatalf("List(tokens after bad prune) tokens=%#v err=%v, want token retained", tokens, err)
+	}
+
 	resp, err = server.Client().Post(server.URL+"/api/v1/tokens/prune", "application/json", strings.NewReader(`{}`))
 	if err != nil {
 		t.Fatalf("POST token prune error = %v", err)

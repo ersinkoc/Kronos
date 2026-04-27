@@ -2053,9 +2053,8 @@ func handlePruneTokens(w http.ResponseWriter, r *http.Request, store *control.To
 		http.Error(w, "token store is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	defer r.Body.Close()
 	var request pruneTokensRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
+	if err := decodeOptionalJSONRequest(w, r, &request); err != nil {
 		http.Error(w, "invalid token prune request", http.StatusBadRequest)
 		return
 	}
@@ -3793,6 +3792,16 @@ func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) error {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	decoder.DisallowUnknownFields()
 	return decoder.Decode(dst)
+}
+
+func decodeOptionalJSONRequest(w http.ResponseWriter, r *http.Request, dst any) error {
+	defer r.Body.Close()
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
 }
 
 func stampTimes(createdAt time.Time, now time.Time) (time.Time, time.Time) {
