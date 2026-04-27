@@ -30,6 +30,7 @@ const statusClass: Record<string, string> = {
   finalizing: "bg-indigo/20 text-indigo-light",
   queued: "bg-indigo/20 text-indigo-light",
   failed: "bg-danger/15 text-danger-light",
+  canceled: "bg-surface text-muted",
 };
 
 const metricTone = {
@@ -170,6 +171,7 @@ export function App() {
   const [targets, setTargets] = useState<Target[]>([]);
   const [storages, setStorages] = useState<Storage[]>([]);
   const [updatingBackupID, setUpdatingBackupID] = useState<string | null>(null);
+  const [updatingJobID, setUpdatingJobID] = useState<string | null>(null);
 
   async function loadOverview({ refresh = false }: { refresh?: boolean } = {}) {
     if (refresh) {
@@ -251,6 +253,22 @@ export function App() {
       setDetailError(err instanceof Error ? err.message : "backup protection update failed");
     } finally {
       setUpdatingBackupID(null);
+    }
+  }
+
+  async function updateJob(job: Job, action: "cancel" | "retry") {
+    setUpdatingJobID(job.id);
+    setDetailError(null);
+    try {
+      const updated = await requestJSON<Job>(`/api/v1/jobs/${encodeURIComponent(job.id)}/${action}`, apiToken, {
+        method: "POST",
+      });
+      setJobs((current) => sortJobs(current.map((item) => (item.id === updated.id ? updated : item))).slice(0, 8));
+      setOverview((current) => updateOverviewJobCounts(current, job.status, updated.status));
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : `job ${action} failed`);
+    } finally {
+      setUpdatingJobID(null);
     }
   }
 
@@ -376,6 +394,7 @@ export function App() {
                         <th className="px-4 py-3 font-semibold">Started</th>
                         <th className="px-4 py-3 font-semibold">Bytes</th>
                         <th className="px-4 py-3 font-semibold">Status</th>
+                        <th className="px-4 py-3 font-semibold">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -391,11 +410,14 @@ export function App() {
                                 {job.status}
                               </span>
                             </td>
+                            <td className="px-4 py-3">
+                              <JobActionButton job={job} updating={updatingJobID === job.id} onAction={updateJob} />
+                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr className="border-t border-line">
-                          <td className="px-4 py-6 text-sm text-muted" colSpan={5}>
+                          <td className="px-4 py-6 text-sm text-muted" colSpan={6}>
                             {loading ? "Loading jobs" : "No recent jobs"}
                           </td>
                         </tr>
@@ -521,6 +543,24 @@ function InventoryGroup({ empty, items }: { empty: string; items: Array<{ key: s
   );
 }
 
+function JobActionButton({ job, updating, onAction }: { job: Job; updating: boolean; onAction: (job: Job, action: "cancel" | "retry") => Promise<void> }) {
+  if (job.status === "queued" || job.status === "running" || job.status === "finalizing") {
+    return (
+      <Button className="h-7 px-2 text-xs" disabled={updating} onClick={() => void onAction(job, "cancel")} type="button" variant="ghost">
+        {updating ? "Saving" : "Cancel"}
+      </Button>
+    );
+  }
+  if (job.status === "failed" || job.status === "canceled") {
+    return (
+      <Button className="h-7 px-2 text-xs" disabled={updating} onClick={() => void onAction(job, "retry")} type="button" variant="secondary">
+        {updating ? "Saving" : "Retry"}
+      </Button>
+    );
+  }
+  return <span className="text-xs text-muted">-</span>;
+}
+
 async function requestJSON<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (token.trim() !== "") {
@@ -542,6 +582,41 @@ function sortJobs(values: Job[]) {
 
 function sortBackups(values: Backup[]) {
   return [...values].sort((a, b) => Date.parse(b.ended_at) - Date.parse(a.ended_at));
+}
+
+function updateOverviewJobCounts(current: Overview | null, previousStatus: string, nextStatus: string) {
+  if (!current || previousStatus === nextStatus) {
+    return current;
+  }
+  const byStatus = { ...current.jobs.by_status };
+  byStatus[previousStatus] = Math.max(0, (byStatus[previousStatus] ?? 0) - 1);
+  byStatus[nextStatus] = (byStatus[nextStatus] ?? 0) + 1;
+  const activeDelta = activeJobDelta(previousStatus, nextStatus);
+  const failedDelta = failedJobDelta(previousStatus, nextStatus);
+  return {
+    ...current,
+    jobs: {
+      ...current.jobs,
+      active: Math.max(0, current.jobs.active + activeDelta),
+      by_status: byStatus,
+    },
+    attention: {
+      ...current.attention,
+      failed_jobs: Math.max(0, current.attention.failed_jobs + failedDelta),
+    },
+  };
+}
+
+function activeJobDelta(previousStatus: string, nextStatus: string) {
+  return (isActiveJobStatus(nextStatus) ? 1 : 0) - (isActiveJobStatus(previousStatus) ? 1 : 0);
+}
+
+function failedJobDelta(previousStatus: string, nextStatus: string) {
+  return (nextStatus === "failed" ? 1 : 0) - (previousStatus === "failed" ? 1 : 0);
+}
+
+function isActiveJobStatus(status: string) {
+  return status === "running" || status === "finalizing";
 }
 
 function metricValue(value: number | undefined, loading: boolean) {
