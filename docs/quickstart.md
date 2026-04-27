@@ -101,7 +101,8 @@ non-dry-run plain SQL restores without `replace_existing=true` and runs `psql`
 in a single transaction. CI exercises PostgreSQL 15, 16, and 17 conformance,
 a PostgreSQL 15-to-17 restore rehearsal, and a PostgreSQL 17 full global restore
 rehearsal that replays actual globals plus database streams into a separate
-target. MySQL/MariaDB has a logical backup/restore MVP that
+target, plus a PostgreSQL 17 10,000-row restore drill. MySQL/MariaDB has a
+logical backup/restore MVP that
 shells out to `mysqldump` for full backups and `mysql` for restores; install
 matching MySQL or MariaDB client tools on worker agents before using it. MySQL
 restore also requires explicit replace-existing intent. CI exercises this path

@@ -42,10 +42,11 @@ This repository currently has the Phase 0 foundation in place and active Phase
   SCAN/DUMP/RESTORE support with ACL snapshot/restore records and JSON command
   stream replay. PostgreSQL has a logical `pg_dump`/`psql` MVP with
   multi-version conformance, 15-to-17 restore rehearsal, and full global
-  restore rehearsal coverage in CI. MySQL/MariaDB has a `mysqldump`/`mysql`
-  logical MVP with real-service MySQL 8.4, MariaDB 11.4, and bidirectional
-  MySQL/MariaDB restore rehearsal coverage in CI, plus 10,000-row MySQL and
-  MariaDB restore drills. MongoDB remains a roadmap driver in this build.
+  restore rehearsal coverage in CI, plus a 10,000-row PostgreSQL restore drill.
+  MySQL/MariaDB has a `mysqldump`/`mysql` logical MVP with real-service MySQL
+  8.4, MariaDB 11.4, and bidirectional MySQL/MariaDB restore rehearsal
+  coverage in CI, plus 10,000-row MySQL and MariaDB restore drills. MongoDB
+  remains a roadmap driver in this build.
 - CLI: dispatcher, version, database repair,
   backup now/list/inspect/protect/unprotect/verification,
   target/storage add/list/inspect/update/remove, schedule add/list/inspect/pause/resume/remove,
