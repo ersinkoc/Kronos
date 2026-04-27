@@ -160,6 +160,6 @@ production suite. The largest remaining areas are:
 2. Wire the WebUI to live API endpoints for dashboard state, jobs, backups, and
    agents.
 3. Add additional notification channels and hook execution surfaces.
-4. Add release signature verification documentation and deeper SLSA attestation.
+4. Add deeper SLSA provenance/attestation for release artifacts.
 5. Add cloud-specific deployment manifests for common managed Kubernetes
    environments.

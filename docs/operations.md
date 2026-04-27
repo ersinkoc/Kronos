@@ -233,6 +233,7 @@ groups:
    make provenance
    make sbom
    make sign-release
+   make verify-signatures
    make verify-release
    ./bin/kronos-$(go env GOOS)-$(go env GOARCH) version
    ```
@@ -266,8 +267,16 @@ groups:
    linux/darwin amd64/arm64 binaries through `scripts/release.sh`, verifies all
    checksums, writes `bin/kronos-provenance.json` and
    `bin/kronos-sbom.json`, signs binaries plus provenance/SBOM metadata with
-   keyless cosign signatures, uploads workflow artifacts, and publishes the tag
-   assets to the GitHub release.
+   keyless cosign signatures, verifies those signatures against the GitHub
+   Actions OIDC issuer and release workflow identity, uploads workflow
+   artifacts, and publishes the tag assets to the GitHub release.
+
+   To verify downloaded release signatures outside CI, install `cosign` and run:
+
+   ```bash
+   COSIGN_CERTIFICATE_IDENTITY_REGEXP='https://github.com/ersinkoc/DatabaseBackup/.github/workflows/release.yml@refs/tags/v.*' \
+     ./scripts/verify-signatures.sh bin
+   ```
 
 3. Drain new work by pausing schedules that should not run during the upgrade:
 

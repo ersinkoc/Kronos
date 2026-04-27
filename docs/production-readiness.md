@@ -21,7 +21,7 @@ multi-instance control-plane operation is still roadmap work.
 | --- | ---: | --- |
 | Implemented Redis/local/S3 path | 93% | Core pipeline, agent/server flow, lost-agent recovery, server restart recovery, restore planning, retention, audit, metrics, release scripts, Kubernetes examples, runbooks, a reusable production gate, and tagged worker/control-plane/Redis backup, restore, retention apply, and recovery E2E tests are in place. |
 | Broad multi-database product vision | 80% | Redis is executable, PostgreSQL now has a plain SQL logical driver MVP, worker pipeline smoke E2E coverage, CI real-service conformance coverage for extension-backed data, large objects, restore guardrails, and rollback behavior. MySQL, MongoDB, storage backends, WebUI workflows, and multi-instance deployment patterns remain roadmap work. |
-| Current repository release hygiene | 96% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, keyless cosign signatures, CI govulncheck, release artifact smoke checks, PostgreSQL service conformance, the production check script, tagged backup/restore/retention/recovery E2E coverage, and Node 24-native GitHub Actions are present. The `golang.org/x/crypto` advisories are fixed. |
+| Current repository release hygiene | 97% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, keyless cosign signatures and verification, CI govulncheck, release artifact smoke checks, PostgreSQL service conformance, the production check script, tagged backup/restore/retention/recovery E2E coverage, and Node 24-native GitHub Actions are present. The `golang.org/x/crypto` advisories are fixed. |
 
 ## Current Release Gate
 
@@ -53,7 +53,8 @@ executes `kronos version`.
   request IDs, security headers, and mutation audit events.
 - Health, readiness, metrics, OpenAPI, operations docs, deployment topology
   docs, restore drill docs, release scripts, provenance metadata, SBOM
-  metadata, keyless cosign release signatures, and Kubernetes examples.
+  metadata, keyless cosign release signatures and verification, and Kubernetes
+  examples.
 - CI runs formatting, vet, staticcheck, govulncheck, race tests, PostgreSQL
   service conformance, release artifact verification, container builds,
   completion syntax checks, and the production-readiness gate. Release
@@ -75,8 +76,8 @@ executes `kronos version`.
 
 1. Harden PostgreSQL operational behavior around roles, global objects, version
    compatibility, and larger restore drills.
-2. Extend E2E coverage into more retention policy edge cases and release
-   signature verification documentation.
+2. Extend E2E coverage into more retention policy edge cases and deeper release
+   attestation.
 3. Expand the WebUI from dashboard shell into live resource CRUD, job detail,
    backup detail, and restore workflows.
 4. Decide the supported multi-instance story for control-plane state, or
@@ -91,4 +92,4 @@ executes `kronos version`.
 2. WebUI live API wiring for overview, jobs, backups, agents, and readiness.
 3. Production deployment hardening for single-replica Kubernetes and external
    secret management.
-4. Add release signature verification documentation and deeper SLSA attestation.
+4. Add deeper SLSA provenance/attestation for release artifacts.
