@@ -232,6 +232,7 @@ groups:
    make release-all
    make provenance
    make sbom
+   make sign-release
    make verify-release
    ./bin/kronos-$(go env GOOS)-$(go env GOARCH) version
    ```
@@ -264,7 +265,8 @@ groups:
    The `release` workflow runs the full Go test suite, builds the default
    linux/darwin amd64/arm64 binaries through `scripts/release.sh`, verifies all
    checksums, writes `bin/kronos-provenance.json` and
-   `bin/kronos-sbom.json`, uploads workflow artifacts, and publishes the tag
+   `bin/kronos-sbom.json`, signs binaries plus provenance/SBOM metadata with
+   keyless cosign signatures, uploads workflow artifacts, and publishes the tag
    assets to the GitHub release.
 
 3. Drain new work by pausing schedules that should not run during the upgrade:
