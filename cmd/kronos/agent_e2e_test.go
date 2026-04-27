@@ -27,64 +27,20 @@ import (
 )
 
 func TestE2EWorkerBacksUpRedisThroughControlPlane(t *testing.T) {
-	redisEndpoint := startE2ERedisServer(t)
+	redisServer := startE2ERedisServer(t)
 	repoDir := t.TempDir()
-	db, err := kvstore.Open(filepath.Join(t.TempDir(), "state.db"))
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
-	defer db.Close()
-	stores, err := newAPIStores(db)
-	if err != nil {
-		t.Fatalf("newAPIStores() error = %v", err)
-	}
-	if err := stores.targets.Save(core.Target{
-		ID:        "target-redis",
-		Name:      "redis-e2e",
-		Driver:    core.TargetDriverRedis,
-		Endpoint:  redisEndpoint,
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	}); err != nil {
-		t.Fatalf("Save(target) error = %v", err)
-	}
-	if err := stores.storages.Save(core.Storage{
-		ID:        "storage-local",
-		Name:      "local-e2e",
-		Kind:      core.StorageKindLocal,
-		URI:       "file://" + repoDir,
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	}); err != nil {
-		t.Fatalf("Save(storage) error = %v", err)
-	}
+	stores := newE2EControlPlaneStores(t, redisServer.endpoint, repoDir)
 
 	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, stores))
 	defer server.Close()
 
+	_, privateKey := newE2EKeys(t)
 	job := enqueueE2EBackup(t, server, "target-redis", "storage-local")
-	_, privateKey, err := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{3}, 64)))
-	if err != nil {
-		t.Fatalf("GenerateKey() error = %v", err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	done := make(chan error, 1)
-	go func() {
-		done <- runAgentWorkerWithToken(ctx, server.Client(), server.URL, control.AgentHeartbeat{ID: "agent-e2e", Capacity: 1}, 5*time.Millisecond, "", agentWorkerOptions{
-			ManifestPrivateKeyHex: hex.EncodeToString(privateKey),
-			ChunkKeyHex:           hex.EncodeToString(bytes.Repeat([]byte{8}, 32)),
-			ChunkAlgorithm:        "aes-256-gcm",
-			Compression:           "none",
-			KeyID:                 "e2e-key",
-		})
-	}()
+	done, cancel := startE2EWorker(t, server, privateKey, "agent-e2e")
 
 	backup := waitForE2EBackup(t, stores.backups, stores.jobs, done, job.ID)
 	cancel()
-	if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
-		t.Fatalf("worker error = %v", err)
-	}
+	expectE2EWorkerCanceled(t, done)
 	finished, ok, err := stores.jobs.Get(job.ID)
 	if err != nil {
 		t.Fatalf("Get(job) error = %v", err)
@@ -94,6 +50,46 @@ func TestE2EWorkerBacksUpRedisThroughControlPlane(t *testing.T) {
 	}
 	if backup.TargetID != "target-redis" || backup.StorageID != "storage-local" || backup.ManifestID.IsZero() || backup.ChunkCount == 0 {
 		t.Fatalf("backup = %#v", backup)
+	}
+	if len(redisServer.restores()) != 0 {
+		t.Fatalf("restore commands during backup = %#v", redisServer.restores())
+	}
+}
+
+func TestE2EWorkerRestoresRedisThroughControlPlane(t *testing.T) {
+	redisServer := startE2ERedisServer(t)
+	repoDir := t.TempDir()
+	stores := newE2EControlPlaneStores(t, redisServer.endpoint, repoDir)
+	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, stores))
+	defer server.Close()
+
+	_, privateKey := newE2EKeys(t)
+	backupJob := enqueueE2EBackup(t, server, "target-redis", "storage-local")
+	done, cancel := startE2EWorker(t, server, privateKey, "agent-e2e")
+	backup := waitForE2EBackup(t, stores.backups, stores.jobs, done, backupJob.ID)
+	cancel()
+	expectE2EWorkerCanceled(t, done)
+
+	restoreJob := enqueueE2ERestore(t, server, backup.ID, "target-redis")
+	done, cancel = startE2EWorker(t, server, privateKey, "agent-e2e")
+	waitForE2EJobStatus(t, stores.jobs, done, restoreJob.ID, core.JobStatusSucceeded)
+	cancel()
+	expectE2EWorkerCanceled(t, done)
+
+	restores := redisServer.restores()
+	if len(restores) != 1 {
+		t.Fatalf("RESTORE commands = %#v, want one command", restores)
+	}
+	want := []string{"RESTORE", "user:1", "0", "dump-user-1", "REPLACE"}
+	if fmt.Sprint(restores[0]) != fmt.Sprint(want) {
+		t.Fatalf("RESTORE command = %#v, want %#v", restores[0], want)
+	}
+	finished, ok, err := stores.jobs.Get(restoreJob.ID)
+	if err != nil {
+		t.Fatalf("Get(restore job) error = %v", err)
+	}
+	if !ok || finished.Operation != core.JobOperationRestore || finished.Status != core.JobStatusSucceeded {
+		t.Fatalf("finished restore ok=%v job=%#v", ok, finished)
 	}
 }
 
@@ -118,6 +114,29 @@ func enqueueE2EBackup(t *testing.T, server *httptest.Server, targetID, storageID
 		t.Fatal("queued job id is empty")
 	}
 	return job
+}
+
+func enqueueE2ERestore(t *testing.T, server *httptest.Server, backupID, targetID core.ID) core.Job {
+	t.Helper()
+
+	payload := fmt.Sprintf(`{"backup_id":%q,"target_id":%q,"replace_existing":true}`, backupID, targetID)
+	resp, err := server.Client().Post(server.URL+"/api/v1/restore", "application/json", strings.NewReader(payload))
+	if err != nil {
+		t.Fatalf("POST /api/v1/restore error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST /api/v1/restore status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var response restoreStartResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		t.Fatalf("Decode(restore response) error = %v", err)
+	}
+	if response.Job.ID.IsZero() || response.Job.Operation != core.JobOperationRestore {
+		t.Fatalf("restore response = %#v", response)
+	}
+	return response.Job
 }
 
 func waitForE2EBackup(t *testing.T, backups *control.BackupStore, jobs *control.JobStore, done <-chan error, jobID core.ID) core.Backup {
@@ -152,7 +171,125 @@ func waitForE2EBackup(t *testing.T, backups *control.BackupStore, jobs *control.
 	return core.Backup{}
 }
 
-func startE2ERedisServer(t *testing.T) string {
+func waitForE2EJobStatus(t *testing.T, jobs *control.JobStore, done <-chan error, jobID core.ID, status core.JobStatus) core.Job {
+	t.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		job, ok, err := jobs.Get(jobID)
+		if err != nil {
+			t.Fatalf("Get(job) error = %v", err)
+		}
+		if ok && job.Status == status {
+			return job
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("worker exited before job %s reached %s: err=%v job_ok=%v job=%#v", jobID, status, err, ok, job)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	job, ok, err := jobs.Get(jobID)
+	if err != nil {
+		t.Fatalf("timed out waiting for job %s status %s; Get(job) error = %v", jobID, status, err)
+	}
+	t.Fatalf("timed out waiting for job %s status %s; job_ok=%v job=%#v", jobID, status, ok, job)
+	return core.Job{}
+}
+
+func newE2EControlPlaneStores(t *testing.T, redisEndpoint string, repoDir string) apiStores {
+	t.Helper()
+
+	db, err := kvstore.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	stores, err := newAPIStores(db)
+	if err != nil {
+		t.Fatalf("newAPIStores() error = %v", err)
+	}
+	if err := stores.targets.Save(core.Target{
+		ID:        "target-redis",
+		Name:      "redis-e2e",
+		Driver:    core.TargetDriverRedis,
+		Endpoint:  redisEndpoint,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("Save(target) error = %v", err)
+	}
+	if err := stores.storages.Save(core.Storage{
+		ID:        "storage-local",
+		Name:      "local-e2e",
+		Kind:      core.StorageKindLocal,
+		URI:       "file://" + repoDir,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("Save(storage) error = %v", err)
+	}
+	return stores
+}
+
+func newE2EKeys(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
+	t.Helper()
+
+	publicKey, privateKey, err := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{3}, 64)))
+	if err != nil {
+		t.Fatalf("GenerateKey() error = %v", err)
+	}
+	return publicKey, privateKey
+}
+
+func startE2EWorker(t *testing.T, server *httptest.Server, privateKey ed25519.PrivateKey, agentID string) (<-chan error, context.CancelFunc) {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- runAgentWorkerWithToken(ctx, server.Client(), server.URL, control.AgentHeartbeat{ID: agentID, Capacity: 1}, 5*time.Millisecond, "", agentWorkerOptions{
+			ManifestPrivateKeyHex: hex.EncodeToString(privateKey),
+			ChunkKeyHex:           hex.EncodeToString(bytes.Repeat([]byte{8}, 32)),
+			ChunkAlgorithm:        "aes-256-gcm",
+			Compression:           "none",
+			KeyID:                 "e2e-key",
+		})
+	}()
+	return done, cancel
+}
+
+func expectE2EWorkerCanceled(t *testing.T, done <-chan error) {
+	t.Helper()
+
+	select {
+	case err := <-done:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatalf("worker error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for worker cancellation")
+	}
+}
+
+type e2eRedisServer struct {
+	endpoint string
+	restored chan []string
+}
+
+func (s *e2eRedisServer) restores() [][]string {
+	var out [][]string
+	for {
+		select {
+		case command := <-s.restored:
+			out = append(out, command)
+		default:
+			return out
+		}
+	}
+}
+
+func startE2ERedisServer(t *testing.T) *e2eRedisServer {
 	t.Helper()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -160,19 +297,20 @@ func startE2ERedisServer(t *testing.T) string {
 		t.Fatalf("Listen() error = %v", err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
+	server := &e2eRedisServer{endpoint: listener.Addr().String(), restored: make(chan []string, 16)}
 	go func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
 				return
 			}
-			go handleE2ERedisConn(t, conn)
+			go handleE2ERedisConn(t, conn, server)
 		}
 	}()
-	return listener.Addr().String()
+	return server
 }
 
-func handleE2ERedisConn(t *testing.T, conn net.Conn) {
+func handleE2ERedisConn(t *testing.T, conn net.Conn, server *e2eRedisServer) {
 	t.Helper()
 	defer conn.Close()
 
@@ -203,6 +341,9 @@ func handleE2ERedisConn(t *testing.T, conn net.Conn) {
 			writeE2ERedisBulk(t, conn, "dump-user-1")
 		case "INFO":
 			writeE2ERedisBulk(t, conn, "# Server\r\nredis_version:7.2.0\r\n")
+		case "RESTORE":
+			server.restored <- append([]string(nil), command...)
+			writeE2ERedisRaw(t, conn, "+OK\r\n")
 		default:
 			writeE2ERedisRaw(t, conn, fmt.Sprintf("-ERR unsupported command %s\r\n", command[0]))
 			return
