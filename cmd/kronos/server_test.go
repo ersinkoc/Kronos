@@ -482,7 +482,16 @@ func TestServerAgentHeartbeatEndpoints(t *testing.T) {
 	server := httptest.NewServer(newServerHandlerWithRegistry(nil, registry))
 	defer server.Close()
 
-	resp, err := server.Client().Post(server.URL+"/api/v1/agents/heartbeat", "application/json", strings.NewReader(`{"id":"agent-1","version":"dev","capacity":2}`))
+	resp, err := server.Client().Post(server.URL+"/api/v1/agents/heartbeat", "application/json", strings.NewReader(`{"id":"bad-agent"} {}`))
+	if err != nil {
+		t.Fatalf("POST heartbeat trailing JSON error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("POST heartbeat trailing JSON status = %d, want 400", resp.StatusCode)
+	}
+
+	resp, err = server.Client().Post(server.URL+"/api/v1/agents/heartbeat", "application/json", strings.NewReader(`{"id":"agent-1","version":"dev","capacity":2}`))
 	if err != nil {
 		t.Fatalf("POST heartbeat error = %v", err)
 	}

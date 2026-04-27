@@ -702,11 +702,8 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 		if !requireScope(w, r, stores.tokens, "agent:write") {
 			return
 		}
-		defer r.Body.Close()
 		var heartbeat control.AgentHeartbeat
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&heartbeat); err != nil {
+		if err := decodeJSONRequest(w, r, &heartbeat); err != nil {
 			http.Error(w, "invalid heartbeat", http.StatusBadRequest)
 			return
 		}
