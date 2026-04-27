@@ -259,6 +259,8 @@ groups:
    For role metadata coverage, add target option `include_globals=true`; the
    driver writes a separate `postgres_globals` stream from
    `pg_dumpall --globals-only --no-role-passwords` before the database stream.
+   The main CI workflow runs this conformance suite against PostgreSQL 15, 16,
+   and 17 with matching client binaries.
 
 2. Publish an immutable release from a signed tag when cutting a production
    version:

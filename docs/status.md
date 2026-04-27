@@ -136,14 +136,14 @@ production suite. The largest remaining areas are:
 - PostgreSQL operational hardening. Current PostgreSQL driver coverage includes
   command-runner unit coverage over `pg_dump` and `psql`, tagged worker
   pipeline smoke E2E coverage with fake client tools, and CI real-service
-  conformance with restore data verification for extension-backed data, large
-  objects, explicit `replace_existing=true` guardrails, single-transaction
-  `psql` execution, rollback behavior for failed restores, and optional
-  `include_globals=true` capture of PostgreSQL role metadata through
-  `pg_dumpall --globals-only --no-role-passwords`, including a conformance
-  assertion that role password material is not emitted. Remaining hardening is
-  around version compatibility, richer global-object restore drills, and larger
-  restore rehearsals.
+  conformance across PostgreSQL 15, 16, and 17 with restore data verification
+  for extension-backed data, large objects, explicit `replace_existing=true`
+  guardrails, single-transaction `psql` execution, rollback behavior for failed
+  restores, and optional `include_globals=true` capture of PostgreSQL role
+  metadata through `pg_dumpall --globals-only --no-role-passwords`, including a
+  conformance assertion that role password material is not emitted. Remaining
+  hardening is around richer global-object restore drills, larger restore
+  rehearsals, and upgrade rehearsal evidence.
 - Additional database drivers such as MySQL and MongoDB. Current executable
   driver coverage is Redis/Valkey plus the PostgreSQL logical MVP.
 - Additional storage backends such as SFTP, Azure Blob, and Google Cloud
@@ -158,8 +158,8 @@ production suite. The largest remaining areas are:
 
 ## Next Best Work
 
-1. Extend PostgreSQL hardening around version compatibility, richer
-   global-object restore drills, and larger restore rehearsals.
+1. Extend PostgreSQL hardening around richer global-object restore drills,
+   larger restore rehearsals, and upgrade rehearsal evidence.
 2. Wire the WebUI to live API endpoints for dashboard state, jobs, backups, and
    agents.
 3. Add additional notification channels and hook execution surfaces.
