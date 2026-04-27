@@ -252,6 +252,67 @@ jobs:
           POSTGRES_VERSION: "17"
         run: go test -tags=integration ./internal/drivers/postgres
 
+  postgres-operator-scale-restore-drill:
+    name: postgres-operator-scale-restore-drill (17)
+    runs-on: ubuntu-latest
+    services:
+      postgres-source:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 20432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      postgres-target:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 21432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Create PostgreSQL 17 client wrappers
+        env:
+          POSTGRES_VERSION: "17"
+        run: |
+          mkdir -p .tools/postgres-client
+          for command in pg_dump pg_dumpall psql; do
+            cat > ".tools/postgres-client/${command}" <<'SH'
+          #!/usr/bin/env sh
+          set -eu
+          command_name="$(basename "$0")"
+          exec docker run -i --rm --network host "postgres:${POSTGRES_VERSION:?}" "$command_name" "$@"
+          SH
+            chmod +x ".tools/postgres-client/${command}"
+          done
+          echo "$PWD/.tools/postgres-client" >> "$GITHUB_PATH"
+
+      - name: PostgreSQL operator-scale restore drill
+        env:
+          KRONOS_POSTGRES_TEST_DSN: postgres://postgres:postgres@127.0.0.1:20432/postgres?sslmode=disable
+          KRONOS_POSTGRES_RESTORE_DSN: postgres://postgres:postgres@127.0.0.1:21432/postgres?sslmode=disable
+          KRONOS_POSTGRES_BULK_ROWS: "10000"
+          KRONOS_POSTGRES_TEST_TIMEOUT_SECONDS: "180"
+          POSTGRES_VERSION: "17"
+        run: go test -tags=integration ./internal/drivers/postgres
+
   mysql-conformance:
     name: mysql-conformance (8.4)
     runs-on: ubuntu-latest

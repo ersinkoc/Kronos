@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -25,9 +26,12 @@ func TestPostgresDriverConformanceBackupRestore(t *testing.T) {
 	requireCommand(t, "pg_dumpall")
 	requireCommand(t, "psql")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	timeoutSeconds := envInt("KRONOS_POSTGRES_TEST_TIMEOUT_SECONDS", 30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
 	defer cancel()
 
+	bulkRows := envInt("KRONOS_POSTGRES_BULK_ROWS", 2500)
+	bulkChecksum := bulkRows * (bulkRows + 1) / 2
 	suffix := randomHex(t, 4)
 	sourceSchema := "kronos_src_" + suffix
 	restoreSchema := "kronos_restore_" + suffix
@@ -71,9 +75,9 @@ insert into %s.users(id, name) values (1, 'Ada'), (2, 'Grace');
 insert into %s.documents(id, payload_oid) values (1, lo_from_bytea(0, convert_to('kronos-large-object-%s', 'UTF8')));
 insert into %s.bulk_items(id, label, payload, created_at)
 select g, 'item-' || g, jsonb_build_object('rank', g, 'bucket', g %% 17, 'tag', 'kronos-%s'), '2026-04-27T00:00:00Z'::timestamptz + (g || ' seconds')::interval
-from generate_series(1, 2500) as g;
+from generate_series(1, %d) as g;
 create index bulk_items_label_idx on %s.bulk_items(label);
-`, sourceSchema, sourceSchema, sourceSchema, sourceSchema, sourceSchema, sourceSchema, suffix, sourceSchema, suffix, sourceSchema)
+`, sourceSchema, sourceSchema, sourceSchema, sourceSchema, sourceSchema, sourceSchema, suffix, sourceSchema, suffix, bulkRows, sourceSchema)
 	runPSQL(t, ctx, sourceDSN, seedSQL)
 	runPSQL(t, ctx, sourceDSN, fmt.Sprintf("create role %s login password 'kronos-secret-%s';", roleName, suffix))
 
@@ -120,8 +124,8 @@ create index bulk_items_label_idx on %s.bulk_items(label);
 			}
 		}
 		fullRestoreCount := queryScalar(t, ctx, restoreDSN, fmt.Sprintf("select count(*) from %s.bulk_items;", sourceSchema))
-		if fullRestoreCount != "2500" {
-			t.Fatalf("full restore bulk row count = %q, want 2500", fullRestoreCount)
+		if fullRestoreCount != strconv.Itoa(bulkRows) {
+			t.Fatalf("full restore bulk row count = %q, want %d", fullRestoreCount, bulkRows)
 		}
 		fullRestoreIndexPresent := queryScalar(t, ctx, restoreDSN, fmt.Sprintf("select to_regclass('%s.bulk_items_label_idx') is not null;", sourceSchema))
 		if fullRestoreIndexPresent != "t" {
@@ -173,12 +177,13 @@ create index bulk_items_label_idx on %s.bulk_items(label);
 		t.Fatalf("restored extension-backed uuid presence = %q, want t", publicID)
 	}
 	bulkCount := queryScalar(t, ctx, restoreDSN, fmt.Sprintf("select count(*) from %s.bulk_items;", restoreSchema))
-	if bulkCount != "2500" {
-		t.Fatalf("restored bulk row count = %q, want 2500", bulkCount)
+	if bulkCount != strconv.Itoa(bulkRows) {
+		t.Fatalf("restored bulk row count = %q, want %d", bulkCount, bulkRows)
 	}
-	bulkChecksum := queryScalar(t, ctx, restoreDSN, fmt.Sprintf("select sum(id)::text || ':' || sum((payload->>'rank')::integer)::text from %s.bulk_items;", restoreSchema))
-	if bulkChecksum != "3126250:3126250" {
-		t.Fatalf("restored bulk checksum = %q, want 3126250:3126250", bulkChecksum)
+	restoredBulkChecksum := queryScalar(t, ctx, restoreDSN, fmt.Sprintf("select sum(id)::text || ':' || sum((payload->>'rank')::integer)::text from %s.bulk_items;", restoreSchema))
+	wantBulkChecksum := fmt.Sprintf("%d:%d", bulkChecksum, bulkChecksum)
+	if restoredBulkChecksum != wantBulkChecksum {
+		t.Fatalf("restored bulk checksum = %q, want %s", restoredBulkChecksum, wantBulkChecksum)
 	}
 	bulkIndexPresent := queryScalar(t, ctx, restoreDSN, fmt.Sprintf("select to_regclass('%s.bulk_items_label_idx') is not null;", restoreSchema))
 	if bulkIndexPresent != "t" {
@@ -219,6 +224,18 @@ func randomHex(t *testing.T, n int) string {
 		t.Fatalf("rand.Read() error = %v", err)
 	}
 	return hex.EncodeToString(buf)
+}
+
+func envInt(name string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
 
 func cleanupSchema(t *testing.T, ctx context.Context, dsn string, schema string) {
