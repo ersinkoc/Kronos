@@ -77,6 +77,7 @@ flowchart TB
     Metrics --> Alerts[Prometheus alert examples]
 
     Ready --> ReadyEndpoint[/readyz]
+    Ready --> Stores[persistent store checks]
     Ready --> ReadyCLI[kronos ready]
     Ready --> Completion[completion coverage]
 

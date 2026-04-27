@@ -1,7 +1,9 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/kronos/kronos/internal/core"
 	"github.com/kronos/kronos/internal/kvstore"
@@ -28,6 +30,25 @@ func (s *ScheduleStateStore) Get(id core.ID) (sched.ScheduleState, bool, error) 
 	var state sched.ScheduleState
 	ok, err := getJSON(s.db, scheduleStatesBucket, []byte(id), &state)
 	return state, ok, err
+}
+
+// List returns persisted schedule cursors ordered by schedule ID.
+func (s *ScheduleStateStore) List() ([]sched.ScheduleState, error) {
+	var states []sched.ScheduleState
+	if err := listJSON(s.db, scheduleStatesBucket, func(data []byte) error {
+		var state sched.ScheduleState
+		if err := json.Unmarshal(data, &state); err != nil {
+			return err
+		}
+		states = append(states, state)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	sort.Slice(states, func(i, j int) bool {
+		return states[i].Schedule.ID < states[j].Schedule.ID
+	})
+	return states, nil
 }
 
 // Save inserts or replaces one schedule cursor.

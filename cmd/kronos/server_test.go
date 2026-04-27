@@ -76,7 +76,12 @@ func TestServerReadinessHandler(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&ready); err != nil {
 		t.Fatalf("Decode(/readyz) error = %v", err)
 	}
-	if ready.Status != "ok" || ready.Checks["jobs"] != "ok" || ready.Checks["audit"] != "ok" || ready.Checks["retention_policies"] != "ok" {
+	for _, name := range []string{"jobs", "audit", "retention_policies", "schedule_states", "notifications"} {
+		if ready.Checks[name] != "ok" {
+			t.Fatalf("readiness check %s = %q, want ok in %#v", name, ready.Checks[name], ready)
+		}
+	}
+	if ready.Status != "ok" {
 		t.Fatalf("readiness = %#v", ready)
 	}
 }

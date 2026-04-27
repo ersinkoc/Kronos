@@ -1714,6 +1714,13 @@ func readinessSnapshot(ctx context.Context, stores apiStores) (readinessResponse
 		_, err := stores.schedules.List()
 		return err
 	})
+	check("schedule_states", func() error {
+		if stores.scheduleStates == nil {
+			return nil
+		}
+		_, err := stores.scheduleStates.List()
+		return err
+	})
 	check("backups", func() error {
 		if stores.backups == nil {
 			return nil
@@ -1726,6 +1733,13 @@ func readinessSnapshot(ctx context.Context, stores apiStores) (readinessResponse
 			return nil
 		}
 		_, err := stores.policies.List()
+		return err
+	})
+	check("notifications", func() error {
+		if stores.notifications == nil {
+			return nil
+		}
+		_, err := stores.notifications.List()
 		return err
 	})
 

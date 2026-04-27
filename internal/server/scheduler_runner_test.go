@@ -134,6 +134,16 @@ func TestScheduleStateStoreDeleteAndRunnerValidation(t *testing.T) {
 	if err := states.Save(sched.ScheduleState{Schedule: core.Schedule{ID: "schedule-1"}}); err != nil {
 		t.Fatalf("Save(state) error = %v", err)
 	}
+	if err := states.Save(sched.ScheduleState{Schedule: core.Schedule{ID: "schedule-0"}}); err != nil {
+		t.Fatalf("Save(second state) error = %v", err)
+	}
+	list, err := states.List()
+	if err != nil {
+		t.Fatalf("List(states) error = %v", err)
+	}
+	if len(list) != 2 || list[0].Schedule.ID != "schedule-0" || list[1].Schedule.ID != "schedule-1" {
+		t.Fatalf("states = %#v", list)
+	}
 	if err := states.Delete("schedule-1"); err != nil {
 		t.Fatalf("Delete(state) error = %v", err)
 	}

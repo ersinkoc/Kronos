@@ -115,6 +115,8 @@ readiness checks, attention counters, and the latest jobs/backups without
 scraping Prometheus text output. `HEAD /healthz`, `HEAD /readyz`,
 `HEAD /metrics`, and `HEAD /api/v1/overview` are also supported for load
 balancers and uptime checks that only need status and headers.
+Readiness covers the persistent job, audit, token, user, target, storage,
+schedule, schedule-state, backup, retention-policy, and notification stores.
 
 The control plane sends conservative browser security headers on API and WebUI
 responses, including `X-Content-Type-Options`, `X-Frame-Options`,
