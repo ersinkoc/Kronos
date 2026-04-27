@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -47,6 +48,12 @@ jobs:
           ./scripts/verify-release.sh bin
           ./scripts/smoke-release.sh bin
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.1
+
+      - name: Sign release artifacts
+        run: ./scripts/sign-release.sh bin
+
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -62,4 +69,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" bin/kronos-* \
             --verify-tag \
             --title "$GITHUB_REF_NAME" \
-            --notes "Kronos release $GITHUB_REF_NAME. Verify downloads with the attached .sha256 files and inspect kronos-provenance.json plus kronos-sbom.json for build metadata."
+            --notes "Kronos release $GITHUB_REF_NAME. Verify downloads with the attached .sha256 files, inspect kronos-provenance.json plus kronos-sbom.json for build metadata, and verify keyless signatures with the attached .sig and .pem files."

@@ -37,6 +37,7 @@ CGO_ENABLED=0 "$go_cmd" build -trimpath \
 sh -n scripts/build.sh
 sh -n scripts/release.sh
 sh -n scripts/provenance.sh
+sh -n scripts/sign-release.sh
 sh -n scripts/sbom.sh
 sh -n scripts/verify-release.sh
 sh -n scripts/smoke-release.sh

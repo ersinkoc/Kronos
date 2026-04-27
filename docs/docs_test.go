@@ -86,8 +86,11 @@ func TestReleaseWorkflowPublishesArtifacts(t *testing.T) {
 		"./scripts/release.sh",
 		"./scripts/provenance.sh",
 		"./scripts/sbom.sh",
+		"./scripts/sign-release.sh",
 		"./scripts/verify-release.sh",
 		"./scripts/smoke-release.sh",
+		"id-token: write",
+		"sigstore/cosign-installer@v4.1.1",
 		"actions/upload-artifact@v7",
 		"gh release create",
 	} {
@@ -103,6 +106,7 @@ func TestReleaseScriptsIncludeProvenance(t *testing.T) {
 	for _, path := range []string{
 		filepath.Join("..", "scripts", "provenance.sh"),
 		filepath.Join("..", "scripts", "sbom.sh"),
+		filepath.Join("..", "scripts", "sign-release.sh"),
 		filepath.Join("..", "scripts", "verify-release.sh"),
 		filepath.Join("..", "Makefile"),
 	} {
