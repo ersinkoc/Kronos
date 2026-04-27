@@ -17,6 +17,7 @@ database backups. The product brief and build plan live in `.project/`:
 - [Restore drills](docs/restore-drills.md)
 - [Cloud secret integration](docs/cloud-secrets.md)
 - [Project status](docs/status.md)
+- [Production readiness](docs/production-readiness.md)
 - [Kubernetes example](deploy/kubernetes/README.md)
 
 This repository currently has the Phase 0 foundation in place and active Phase

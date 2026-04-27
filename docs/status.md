@@ -1,6 +1,6 @@
 # Project Status
 
-Last reviewed from the repository state on April 26, 2026.
+Last reviewed from the repository state on April 27, 2026.
 
 Kronos is currently a working Phase 1 / early Phase 2 backup platform rather
 than a bare scaffold. The core control plane, CLI, state store, scheduler,
@@ -110,6 +110,9 @@ backends; unsupported capabilities are surfaced early instead of falling
 through to ambiguous runtime behavior.
 
 ## Known Gaps
+
+See [Production Readiness](production-readiness.md) for the current release
+gate, readiness estimate, and next engineering slices.
 
 Kronos is usable for its implemented Redis/local/S3-oriented paths, but it is
 not yet a broad multi-database production suite. The largest remaining areas
