@@ -142,6 +142,11 @@ type Target = {
   name: string;
   driver: string;
   endpoint: string;
+  database?: string;
+  options?: Record<string, unknown>;
+  labels?: Record<string, string>;
+  created_at?: string;
+  updated_at?: string;
 };
 
 type Storage = {
@@ -149,6 +154,10 @@ type Storage = {
   name: string;
   kind: string;
   uri: string;
+  options?: Record<string, unknown>;
+  labels?: Record<string, string>;
+  created_at?: string;
+  updated_at?: string;
 };
 
 type TargetListResponse = {
@@ -189,6 +198,9 @@ export function App() {
   const [loadingJobID, setLoadingJobID] = useState<string | null>(null);
   const [selectedBackup, setSelectedBackup] = useState<Backup | null>(null);
   const [loadingBackupID, setLoadingBackupID] = useState<string | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
+  const [selectedStorage, setSelectedStorage] = useState<Storage | null>(null);
+  const [loadingInventoryID, setLoadingInventoryID] = useState<string | null>(null);
 
   async function loadOverview({ refresh = false }: { refresh?: boolean } = {}) {
     if (refresh) {
@@ -310,6 +322,32 @@ export function App() {
       setDetailError(err instanceof Error ? err.message : "job detail request failed");
     } finally {
       setLoadingJobID(null);
+    }
+  }
+
+  async function inspectTarget(target: Target) {
+    setLoadingInventoryID(target.id);
+    setDetailError(null);
+    try {
+      setSelectedTarget(await requestJSON<Target>(`/api/v1/targets/${encodeURIComponent(target.id)}`, apiToken));
+      setSelectedStorage(null);
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "target detail request failed");
+    } finally {
+      setLoadingInventoryID(null);
+    }
+  }
+
+  async function inspectStorage(storage: Storage) {
+    setLoadingInventoryID(storage.id);
+    setDetailError(null);
+    try {
+      setSelectedStorage(await requestJSON<Storage>(`/api/v1/storages/${encodeURIComponent(storage.id)}`, apiToken));
+      setSelectedTarget(null);
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "storage detail request failed");
+    } finally {
+      setLoadingInventoryID(null);
     }
   }
 
@@ -500,6 +538,8 @@ export function App() {
                       key: target.id,
                       label: target.name || target.id,
                       value: target.driver || "target",
+                      loading: loadingInventoryID === target.id,
+                      onInspect: () => void inspectTarget(target),
                     }))}
                   />
                   <InventoryGroup
@@ -508,6 +548,8 @@ export function App() {
                       key: storage.id,
                       label: storage.name || storage.id,
                       value: storage.kind || "storage",
+                      loading: loadingInventoryID === storage.id,
+                      onInspect: () => void inspectStorage(storage),
                     }))}
                   />
                 </div>
@@ -552,6 +594,8 @@ export function App() {
                 </div>
               </section>
 
+              <TargetDetail target={selectedTarget} />
+              <StorageDetail storage={selectedStorage} />
               <JobDetail job={selectedJob} />
               <BackupDetail backup={selectedBackup} />
             </aside>
@@ -593,7 +637,13 @@ function HealthRow({ label, value, tone }: { label: string; value: string; tone:
   );
 }
 
-function InventoryGroup({ empty, items }: { empty: string; items: Array<{ key: string; label: string; value: string }> }) {
+function InventoryGroup({
+  empty,
+  items,
+}: {
+  empty: string;
+  items: Array<{ key: string; label: string; value: string; loading?: boolean; onInspect?: () => void }>;
+}) {
   if (items.length === 0) {
     return <div className="rounded-md bg-surface px-3 py-2 text-sm text-muted">{empty}</div>;
   }
@@ -602,7 +652,14 @@ function InventoryGroup({ empty, items }: { empty: string; items: Array<{ key: s
       {items.map((item) => (
         <div key={item.key} className="flex h-10 items-center justify-between gap-3 rounded-md bg-surface px-3 text-sm">
           <span className="min-w-0 truncate">{item.label}</span>
-          <span className="shrink-0 font-mono text-xs text-muted">{item.value}</span>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="font-mono text-xs text-muted">{item.value}</span>
+            {item.onInspect ? (
+              <Button className="h-7 px-2 text-xs" disabled={item.loading} onClick={item.onInspect} type="button" variant="ghost">
+                {item.loading ? "Loading" : "Details"}
+              </Button>
+            ) : null}
+          </div>
         </div>
       ))}
     </div>
@@ -625,6 +682,49 @@ function JobActionButton({ job, updating, onAction }: { job: Job; updating: bool
     );
   }
   return <span className="text-xs text-muted">-</span>;
+}
+
+function TargetDetail({ target }: { target: Target | null }) {
+  if (!target) {
+    return null;
+  }
+  return (
+    <section className="rounded-md border border-line bg-panel p-4">
+      <h2 className="text-base font-semibold">Target detail</h2>
+      <div className="mt-4 grid gap-3">
+        <HealthRow label="ID" value={target.id} tone="bronze" />
+        <HealthRow label="Name" value={target.name || "-"} tone="indigo" />
+        <HealthRow label="Driver" value={target.driver || "-"} tone="bronze" />
+        <HealthRow label="Endpoint" value={target.endpoint || "-"} tone="indigo" />
+        <HealthRow label="Database" value={target.database || "-"} tone="bronze" />
+        <HealthRow label="Options" value={formatRecord(target.options)} tone="warning" />
+        <HealthRow label="Labels" value={formatRecord(target.labels)} tone="indigo" />
+        <HealthRow label="Created" value={formatDateTime(target.created_at) ?? "-"} tone="bronze" />
+        <HealthRow label="Updated" value={formatDateTime(target.updated_at) ?? "-"} tone="indigo" />
+      </div>
+    </section>
+  );
+}
+
+function StorageDetail({ storage }: { storage: Storage | null }) {
+  if (!storage) {
+    return null;
+  }
+  return (
+    <section className="rounded-md border border-line bg-panel p-4">
+      <h2 className="text-base font-semibold">Storage detail</h2>
+      <div className="mt-4 grid gap-3">
+        <HealthRow label="ID" value={storage.id} tone="bronze" />
+        <HealthRow label="Name" value={storage.name || "-"} tone="indigo" />
+        <HealthRow label="Kind" value={storage.kind || "-"} tone="bronze" />
+        <HealthRow label="URI" value={storage.uri || "-"} tone="indigo" />
+        <HealthRow label="Options" value={formatRecord(storage.options)} tone="warning" />
+        <HealthRow label="Labels" value={formatRecord(storage.labels)} tone="indigo" />
+        <HealthRow label="Created" value={formatDateTime(storage.created_at) ?? "-"} tone="bronze" />
+        <HealthRow label="Updated" value={formatDateTime(storage.updated_at) ?? "-"} tone="indigo" />
+      </div>
+    </section>
+  );
 }
 
 function JobDetail({ job }: { job: Job | null }) {
@@ -749,6 +849,15 @@ function metricValue(value: number | undefined, loading: boolean) {
 
 function sumValues(values: Record<string, number>) {
   return Object.values(values).reduce((sum, value) => sum + value, 0);
+}
+
+function formatRecord(value: Record<string, unknown> | undefined) {
+  if (!value || Object.keys(value).length === 0) {
+    return "-";
+  }
+  return Object.entries(value)
+    .map(([key, entry]) => `${key}=${String(entry)}`)
+    .join(", ");
 }
 
 function formatDateTime(value: string | undefined) {
