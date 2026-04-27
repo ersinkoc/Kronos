@@ -115,6 +115,14 @@ type Backup = {
   protected: boolean;
 };
 
+type JobListResponse = {
+  jobs?: Job[];
+};
+
+type BackupListResponse = {
+  backups?: Backup[];
+};
+
 function AppLogo() {
   return (
     <div className="flex h-12 items-center gap-3 px-4">
@@ -130,10 +138,13 @@ function AppLogo() {
 export function App() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [apiToken, setAPIToken] = useState(() => localStorage.getItem(tokenStorageKey) ?? "");
   const [draftToken, setDraftToken] = useState(apiToken);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [backups, setBackups] = useState<Backup[]>([]);
 
   async function loadOverview({ refresh = false }: { refresh?: boolean } = {}) {
     if (refresh) {
@@ -142,21 +153,28 @@ export function App() {
       setLoading(true);
     }
     setError(null);
+    setDetailError(null);
     try {
-      const headers: Record<string, string> = { Accept: "application/json" };
-      if (apiToken.trim() !== "") {
-        headers.Authorization = `Bearer ${apiToken.trim()}`;
+      const nextOverview = await requestJSON<Overview>("/api/v1/overview", apiToken);
+      setOverview(nextOverview);
+      const [jobResult, backupResult] = await Promise.allSettled([
+        requestJSON<JobListResponse>("/api/v1/jobs", apiToken),
+        requestJSON<BackupListResponse>("/api/v1/backups", apiToken),
+      ]);
+      if (jobResult.status === "fulfilled") {
+        setJobs(sortJobs(jobResult.value.jobs ?? []).slice(0, 8));
+      } else {
+        setJobs(nextOverview.latest_jobs ?? []);
       }
-      const response = await fetch("/api/v1/overview", {
-        headers,
-      });
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          throw new Error("API token required");
-        }
-        throw new Error(`overview request failed with ${response.status}`);
+      if (backupResult.status === "fulfilled") {
+        setBackups(sortBackups(backupResult.value.backups ?? []).slice(0, 8));
+      } else {
+        setBackups(nextOverview.latest_backups ?? []);
       }
-      setOverview((await response.json()) as Overview);
+      const failedDetails = [jobResult, backupResult].filter((result) => result.status === "rejected").length;
+      if (failedDetails > 0) {
+        setDetailError("Some detail endpoints require additional read scopes");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "overview request failed");
     } finally {
@@ -172,7 +190,8 @@ export function App() {
   const generatedAt = useMemo(() => formatDateTime(overview?.generated_at), [overview?.generated_at]);
   const attentionTotal = overview ? sumValues(overview.attention) : 0;
   const queuedJobs = overview?.jobs.by_status.queued ?? 0;
-  const latestJobs = overview?.latest_jobs ?? [];
+  const latestJobs = jobs.length > 0 ? jobs : overview?.latest_jobs ?? [];
+  const latestBackups = backups.length > 0 ? backups : overview?.latest_backups ?? [];
 
   return (
     <main className="min-h-screen bg-void text-marble">
@@ -264,6 +283,11 @@ export function App() {
                   {error}
                 </section>
               ) : null}
+              {detailError && !error ? (
+                <section className="rounded-md border border-warning/45 bg-warning/10 p-4 text-sm text-warning">
+                  {detailError}
+                </section>
+              ) : null}
 
               <section className="overflow-hidden rounded-md border border-line bg-panel">
                 <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
@@ -325,8 +349,8 @@ export function App() {
               <section className="rounded-md border border-line bg-panel p-4">
                 <h2 className="text-base font-semibold">Latest backups</h2>
                 <div className="mt-4 grid gap-3">
-                  {(overview?.latest_backups ?? []).length > 0 ? (
-                    overview?.latest_backups?.map((backup) => (
+                  {latestBackups.length > 0 ? (
+                    latestBackups.map((backup) => (
                       <div key={backup.id} className="flex h-10 items-center justify-between gap-3 rounded-md bg-surface px-3 text-sm">
                         <span className="min-w-0 truncate">{backup.target_id || backup.id}</span>
                         <span className="font-mono text-xs text-muted">{formatBytes(backup.size_bytes)}</span>
@@ -375,6 +399,29 @@ function HealthRow({ label, value, tone }: { label: string; value: string; tone:
       <span className={`font-semibold ${healthTone[tone]}`}>{value}</span>
     </div>
   );
+}
+
+async function requestJSON<T>(path: string, token: string): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token.trim() !== "") {
+    headers.Authorization = `Bearer ${token.trim()}`;
+  }
+  const response = await fetch(path, { headers });
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("API token required");
+    }
+    throw new Error(`${path} request failed with ${response.status}`);
+  }
+  return (await response.json()) as T;
+}
+
+function sortJobs(values: Job[]) {
+  return [...values].sort((a, b) => Date.parse(b.queued_at) - Date.parse(a.queued_at));
+}
+
+function sortBackups(values: Backup[]) {
+  return [...values].sort((a, b) => Date.parse(b.ended_at) - Date.parse(a.ended_at));
 }
 
 function metricValue(value: number | undefined, loading: boolean) {
