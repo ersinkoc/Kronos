@@ -359,3 +359,72 @@ jobs:
           KRONOS_MYSQL_BULK_ROWS: "1500"
           MYSQL_VERSION: "8.4"
         run: go test -tags=integration ./internal/drivers/mysql
+
+  mariadb-to-mysql-restore-rehearsal:
+    name: mariadb-to-mysql-restore-rehearsal (11.4-to-8.4)
+    runs-on: ubuntu-latest
+    services:
+      mariadb-source:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: mariadb
+        ports:
+          - 14307:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mysql-target:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: mysql
+        ports:
+          - 14306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pmysql"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Create hybrid MariaDB/MySQL client wrappers
+        env:
+          MARIADB_VERSION: "11.4"
+          MYSQL_VERSION: "8.4"
+        run: |
+          mkdir -p .tools/mariadb-to-mysql-client
+          cat > .tools/mariadb-to-mysql-client/mysql <<'SH'
+          #!/usr/bin/env sh
+          set -eu
+          exec docker run -i --rm --network host -e MYSQL_PWD="${MYSQL_PWD:-}" "mysql:${MYSQL_VERSION:?}" mysql "$@"
+          SH
+          cat > .tools/mariadb-to-mysql-client/mysqldump <<'SH'
+          #!/usr/bin/env sh
+          set -eu
+          exec docker run -i --rm --network host -e MYSQL_PWD="${MYSQL_PWD:-}" "mariadb:${MARIADB_VERSION:?}" mariadb-dump "$@"
+          SH
+          chmod +x .tools/mariadb-to-mysql-client/mysql .tools/mariadb-to-mysql-client/mysqldump
+          echo "$PWD/.tools/mariadb-to-mysql-client" >> "$GITHUB_PATH"
+
+      - name: MariaDB to MySQL restore rehearsal
+        env:
+          KRONOS_MYSQL_TEST_ADDR: 127.0.0.1:14307
+          KRONOS_MYSQL_TEST_USER: root
+          KRONOS_MYSQL_TEST_PASSWORD: mariadb
+          KRONOS_MYSQL_RESTORE_ADDR: 127.0.0.1:14306
+          KRONOS_MYSQL_RESTORE_USER: root
+          KRONOS_MYSQL_RESTORE_PASSWORD: mysql
+          KRONOS_MYSQL_DUMP_SET_GTID_PURGED: omit
+          KRONOS_MYSQL_BULK_ROWS: "1500"
+          MARIADB_VERSION: "11.4"
+          MYSQL_VERSION: "8.4"
+        run: go test -tags=integration ./internal/drivers/mysql
