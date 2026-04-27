@@ -981,7 +981,16 @@ func TestServerTokenEndpoints(t *testing.T) {
 	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, stores))
 	defer server.Close()
 
-	resp, err := server.Client().Post(server.URL+"/api/v1/tokens", "application/json", strings.NewReader(`{"name":"ci","user_id":"user-1","scopes":["backup:read","backup:write"]}`))
+	resp, err := server.Client().Post(server.URL+"/api/v1/tokens", "application/json", strings.NewReader(`{"name":"bad","user_id":"user-1","scopes":["backup:read"]} {}`))
+	if err != nil {
+		t.Fatalf("POST token trailing JSON error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("POST token trailing JSON status = %d, want 400", resp.StatusCode)
+	}
+
+	resp, err = server.Client().Post(server.URL+"/api/v1/tokens", "application/json", strings.NewReader(`{"name":"ci","user_id":"user-1","scopes":["backup:read","backup:write"]}`))
 	if err != nil {
 		t.Fatalf("POST token error = %v", err)
 	}
@@ -1094,6 +1103,18 @@ func TestServerTokenEndpoints(t *testing.T) {
 	}
 	if tokens, err = stores.tokens.List(); err != nil || len(tokens) != 1 {
 		t.Fatalf("List(tokens after bad prune) tokens=%#v err=%v, want token retained", tokens, err)
+	}
+
+	resp, err = server.Client().Post(server.URL+"/api/v1/tokens/prune", "application/json", strings.NewReader(`{} {}`))
+	if err != nil {
+		t.Fatalf("POST token prune trailing JSON error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("POST token prune trailing JSON status = %d, want 400", resp.StatusCode)
+	}
+	if tokens, err = stores.tokens.List(); err != nil || len(tokens) != 1 {
+		t.Fatalf("List(tokens after trailing JSON prune) tokens=%#v err=%v, want token retained", tokens, err)
 	}
 
 	resp, err = server.Client().Post(server.URL+"/api/v1/tokens/prune", "application/json", strings.NewReader(`{}`))

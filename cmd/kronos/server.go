@@ -3791,7 +3791,10 @@ func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) error {
 	defer r.Body.Close()
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	decoder.DisallowUnknownFields()
-	return decoder.Decode(dst)
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+	return ensureJSONEOF(decoder)
 }
 
 func decodeOptionalJSONRequest(w http.ResponseWriter, r *http.Request, dst any) error {
@@ -3800,8 +3803,20 @@ func decodeOptionalJSONRequest(w http.ResponseWriter, r *http.Request, dst any) 
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(dst); err != nil && !errors.Is(err, io.EOF) {
 		return err
+	} else if errors.Is(err, io.EOF) {
+		return nil
 	}
-	return nil
+	return ensureJSONEOF(decoder)
+}
+
+func ensureJSONEOF(decoder *json.Decoder) error {
+	var extra any
+	if err := decoder.Decode(&extra); errors.Is(err, io.EOF) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	return fmt.Errorf("request body must contain a single JSON value")
 }
 
 func stampTimes(createdAt time.Time, now time.Time) (time.Time, time.Time) {
