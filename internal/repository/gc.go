@@ -91,7 +91,6 @@ func listAll(ctx context.Context, backend storage.Backend, prefix string, fn fun
 			if err := fn(info); err != nil {
 				return err
 			}
-			token = info.Key
 		}
 		if page.NextToken != "" {
 			token = page.NextToken

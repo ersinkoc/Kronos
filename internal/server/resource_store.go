@@ -598,13 +598,3 @@ func deleteKey(db *kvstore.DB, bucketName []byte, key []byte) error {
 		return bucket.Delete(key)
 	})
 }
-
-func stampCreatedUpdated(createdAt time.Time, now time.Time) (time.Time, time.Time) {
-	if now.IsZero() {
-		now = time.Now().UTC()
-	}
-	if createdAt.IsZero() {
-		createdAt = now
-	}
-	return createdAt.UTC(), now.UTC()
-}

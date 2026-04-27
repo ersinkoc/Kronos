@@ -2431,11 +2431,6 @@ func handleClaimJob(w http.ResponseWriter, r *http.Request, store *control.JobSt
 		http.Error(w, "job store is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	jobs, err := store.List()
-	if err != nil {
-		http.Error(w, "list jobs", http.StatusInternalServerError)
-		return
-	}
 	if _, failedJobIDs, err := failLostAgentJobs(store, registry, time.Now().UTC()); err != nil {
 		http.Error(w, "fail lost agent jobs", http.StatusInternalServerError)
 		return
@@ -2447,7 +2442,7 @@ func handleClaimJob(w http.ResponseWriter, r *http.Request, store *control.JobSt
 			return
 		}
 	}
-	jobs, err = store.List()
+	jobs, err := store.List()
 	if err != nil {
 		http.Error(w, "list jobs", http.StatusInternalServerError)
 		return
