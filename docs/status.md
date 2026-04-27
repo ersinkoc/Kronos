@@ -142,9 +142,10 @@ production suite. The largest remaining areas are:
   rollback behavior for failed restores, and optional `include_globals=true`
   capture of PostgreSQL role metadata through
   `pg_dumpall --globals-only --no-role-passwords`, including a conformance
-  assertion that role password material is not emitted. Remaining hardening is
-  around richer global-object restore drills, operator-scale restore rehearsals,
-  and upgrade rehearsal evidence.
+  assertion that role password material is not emitted and a focused
+  `postgres_globals` restore drill for role metadata. Remaining hardening is
+  around full-cluster global-object restore rehearsals, operator-scale restore
+  drills, and upgrade rehearsal evidence.
 - Additional database drivers such as MySQL and MongoDB. Current executable
   driver coverage is Redis/Valkey plus the PostgreSQL logical MVP.
 - Additional storage backends such as SFTP, Azure Blob, and Google Cloud
@@ -159,8 +160,8 @@ production suite. The largest remaining areas are:
 
 ## Next Best Work
 
-1. Extend PostgreSQL hardening around richer global-object restore drills,
-   operator-scale restore rehearsals, and upgrade rehearsal evidence.
+1. Extend PostgreSQL hardening around full-cluster global-object restore
+   rehearsals, operator-scale restore drills, and upgrade rehearsal evidence.
 2. Wire the WebUI to live API endpoints for dashboard state, jobs, backups, and
    agents.
 3. Add additional notification channels and hook execution surfaces.
