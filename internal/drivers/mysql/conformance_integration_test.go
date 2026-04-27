@@ -26,7 +26,7 @@ func TestMySQLDriverConformanceBackupRestore(t *testing.T) {
 	requireCommand(t, "mysql")
 	requireCommand(t, "mysqldump")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), mysqlTestTimeout(t))
 	defer cancel()
 
 	suffix := randomHex(t, 4)
@@ -142,6 +142,20 @@ func mysqlBulkRows(t *testing.T) int {
 		t.Fatalf("KRONOS_MYSQL_BULK_ROWS = %q, want positive integer", value)
 	}
 	return rows
+}
+
+func mysqlTestTimeout(t *testing.T) time.Duration {
+	t.Helper()
+
+	value := strings.TrimSpace(os.Getenv("KRONOS_MYSQL_TEST_TIMEOUT_SECONDS"))
+	if value == "" {
+		return 90 * time.Second
+	}
+	seconds, err := strconv.Atoi(value)
+	if err != nil || seconds < 1 {
+		t.Fatalf("KRONOS_MYSQL_TEST_TIMEOUT_SECONDS = %q, want positive integer", value)
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func mysqlTestTarget(addr string, database string, username string, password string) drivers.Target {
