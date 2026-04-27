@@ -250,7 +250,8 @@ groups:
    ```
 
    Set `KRONOS_POSTGRES_RESTORE_DSN` when restore verification should target a
-   different database than the source.
+   different database than the source. PostgreSQL non-dry-run restores require
+   explicit replace-existing intent and run through `psql --single-transaction`.
 
 2. Publish an immutable release from a signed tag when cutting a production
    version:
@@ -439,7 +440,9 @@ request ID in the error text when the server provides one.
    ```
 
    Point-in-time restore timestamps supplied with `--at` must be RFC3339 values
-   and cannot be in the future.
+   and cannot be in the future. PostgreSQL restore jobs must include
+   `--replace-existing --yes`; dry-run restore previews remain available
+   without that destructive-operation confirmation.
 
 5. Verify the audit chain after recovery:
 

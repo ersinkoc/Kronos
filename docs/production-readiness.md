@@ -6,8 +6,9 @@ Kronos is close to production-ready for the implemented Redis or Valkey backup
 path with local or S3-compatible storage. A PostgreSQL logical backup/restore
 MVP is now present through `pg_dump` and `psql`, with worker/control-plane/local
 repository smoke E2E coverage and real-service PostgreSQL conformance running
-in CI. It still needs broader PostgreSQL operational hardening before it should
-be treated as a fully production-grade PostgreSQL path. The full product vision
+in CI. It still needs broader PostgreSQL operational hardening around roles,
+extensions, large objects, and deeper restore drills before it should be
+treated as a fully production-grade PostgreSQL path. The full product vision
 across MySQL,
 MongoDB, SFTP, Azure Blob, Google Cloud Storage, deeper WebUI workflows, and
 multi-instance control-plane operation is still roadmap work.
@@ -17,7 +18,7 @@ multi-instance control-plane operation is still roadmap work.
 | Scope | Estimate | Notes |
 | --- | ---: | --- |
 | Implemented Redis/local/S3 path | 93% | Core pipeline, agent/server flow, lost-agent recovery, server restart recovery, restore planning, retention, audit, metrics, release scripts, Kubernetes examples, runbooks, a reusable production gate, and tagged worker/control-plane/Redis backup, restore, retention apply, and recovery E2E tests are in place. |
-| Broad multi-database product vision | 78% | Redis is executable, PostgreSQL now has a plain SQL logical driver MVP, worker pipeline smoke E2E coverage, and CI real-service conformance coverage. MySQL, MongoDB, storage backends, WebUI workflows, and multi-instance deployment patterns remain roadmap work. |
+| Broad multi-database product vision | 79% | Redis is executable, PostgreSQL now has a plain SQL logical driver MVP, worker pipeline smoke E2E coverage, CI real-service conformance coverage, and restore guardrails. MySQL, MongoDB, storage backends, WebUI workflows, and multi-instance deployment patterns remain roadmap work. |
 | Current repository release hygiene | 93% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, CI govulncheck, release artifact smoke checks, PostgreSQL service conformance, the production check script, and tagged backup/restore/retention/recovery E2E coverage are present. The `golang.org/x/crypto` advisories are fixed. |
 
 ## Current Release Gate
@@ -39,7 +40,9 @@ executes `kronos version`.
 - Redis/Valkey driver coverage with backup and restore paths.
 - PostgreSQL logical driver MVP using `pg_dump` for full backups and `psql` for
   restores, with deterministic command-runner unit tests, tagged worker
-  pipeline smoke E2E coverage, and CI real-service conformance coverage.
+  pipeline smoke E2E coverage, CI real-service conformance coverage,
+  `replace_existing` enforcement for non-dry-run restores, and
+  single-transaction `psql` execution.
 - Local and S3-compatible storage backends.
 - Persistent control plane state, scheduler state, jobs, backups, retention,
   notifications, users, tokens, and audit log.
@@ -68,7 +71,7 @@ executes `kronos version`.
 ## Blocking Work Before Calling The Whole Product Production-Ready
 
 1. Harden PostgreSQL operational behavior around roles, extensions, large
-   objects, and restore target safety.
+   objects, and deeper restore failure scenarios.
 2. Extend E2E coverage into more retention policy edge cases and release
    provenance signing.
 3. Expand the WebUI from dashboard shell into live resource CRUD, job detail,
@@ -79,7 +82,8 @@ executes `kronos version`.
 
 ## Next Engineering Slices
 
-1. Harden PostgreSQL restore safety and extend real-service conformance cases.
+1. Extend PostgreSQL real-service conformance around roles, extensions, large
+   objects, and restore failure behavior.
 2. WebUI live API wiring for overview, jobs, backups, agents, and readiness.
 3. Production deployment hardening for single-replica Kubernetes and external
    secret management.

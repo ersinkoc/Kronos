@@ -92,9 +92,11 @@ Register a Redis target. Adjust the endpoint if Redis is elsewhere:
 Redis/Valkey is the most complete executable database driver in this build.
 PostgreSQL also has a logical backup/restore MVP that shells out to `pg_dump`
 for full backups and `psql` for restores; install PostgreSQL client tools on
-worker agents before using it. MySQL/MariaDB and MongoDB are still roadmap
-drivers and fail fast with an explicit unsupported-driver error when probed or
-executed.
+worker agents before using it. PostgreSQL restore requires `--replace-existing`
+and `--yes`; the driver refuses non-dry-run plain SQL restores without
+`replace_existing=true` and runs `psql` in a single transaction. MySQL/MariaDB
+and MongoDB are still roadmap drivers and fail fast with an explicit
+unsupported-driver error when probed or executed.
 
 ## 6. Run A Backup
 
