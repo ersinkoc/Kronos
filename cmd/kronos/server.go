@@ -1391,6 +1391,8 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, registry *control.Age
 		for _, rule := range rules {
 			if rule.Enabled {
 				snapshot.NotificationRulesEnabled++
+			} else {
+				snapshot.NotificationRulesDisabled++
 			}
 		}
 	}

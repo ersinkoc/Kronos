@@ -678,6 +678,7 @@ func TestServerMetricsEndpoint(t *testing.T) {
 		`kronos_retention_policies_total 1`,
 		`kronos_notification_rules_total 2`,
 		`kronos_notification_rules_enabled 1`,
+		`kronos_notification_rules_disabled 1`,
 		`kronos_users_total 1`,
 		`kronos_tokens_total 3`,
 		`kronos_tokens_revoked 1`,
