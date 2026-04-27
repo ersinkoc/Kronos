@@ -56,9 +56,9 @@ flowchart LR
 - Readiness, health, Prometheus metrics with `GET`/`HEAD` probe support,
   operations docs, CLI docs, quickstart, architecture docs, deployment topology
   guidance, restore drill guidance, multi-platform release artifacts, checksums,
-  provenance metadata, SBOM metadata, container builds, GitHub release
-  publishing, Kubernetes deployment examples, and cloud secret integration
-  guidance.
+  provenance metadata, SBOM metadata, release artifact smoke checks, container
+  builds, GitHub release publishing, Kubernetes deployment examples, and cloud
+  secret integration guidance.
 
 ## Recent Progress
 
@@ -147,6 +147,5 @@ are:
    agents.
 3. Add additional notification channels and hook execution surfaces.
 4. Sign release provenance and SBOM metadata with keyless CI identity.
-5. Add release artifact smoke tests that execute the built archive contents.
-6. Add cloud-specific deployment manifests for common managed Kubernetes
+5. Add cloud-specific deployment manifests for common managed Kubernetes
    environments.
