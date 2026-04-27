@@ -12,18 +12,6 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -54,14 +42,6 @@ jobs:
 
       - name: Test
         run: go test -race ./...
-
-      - name: PostgreSQL conformance
-        env:
-          KRONOS_POSTGRES_TEST_DSN: postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
-          go test -tags=integration ./internal/drivers/postgres
 
       - name: Production readiness gate
         run: ./scripts/production-check.sh
@@ -97,3 +77,57 @@ jobs:
 
       - name: Check completion script
         run: ./bin/kronos completion bash | bash -n
+
+  postgres-conformance:
+    name: postgres-conformance (${{ matrix.postgres-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-version:
+          - "15"
+          - "16"
+          - "17"
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-version }}
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Create matching PostgreSQL client wrappers
+        env:
+          POSTGRES_VERSION: ${{ matrix.postgres-version }}
+        run: |
+          mkdir -p .tools/postgres-client
+          for command in pg_dump pg_dumpall psql; do
+            cat > ".tools/postgres-client/${command}" <<'SH'
+          #!/usr/bin/env sh
+          set -eu
+          command_name="$(basename "$0")"
+          exec docker run -i --rm --network host "postgres:${POSTGRES_VERSION:?}" "$command_name" "$@"
+          SH
+            chmod +x ".tools/postgres-client/${command}"
+          done
+          echo "$PWD/.tools/postgres-client" >> "$GITHUB_PATH"
+
+      - name: PostgreSQL conformance
+        env:
+          KRONOS_POSTGRES_TEST_DSN: postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
+          POSTGRES_VERSION: ${{ matrix.postgres-version }}
+        run: go test -tags=integration ./internal/drivers/postgres
