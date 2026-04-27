@@ -46,6 +46,7 @@ flowchart LR
 - Token-based authorization with scoped bearer tokens, role-capped token
   creation, inactive token pruning, request IDs, and audit recording for
   mutations.
+- Baseline HTTP security headers for API and embedded WebUI responses.
 - Webhook notification rules for terminal job events, API management, optional
   HMAC payload signatures, bounded retries, and delivery metadata in the audit
   chain.

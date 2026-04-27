@@ -349,6 +349,19 @@ func withRequestID(next http.Handler) http.Handler {
 	})
 }
 
+func withSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headers := w.Header()
+		headers.Set("X-Content-Type-Options", "nosniff")
+		headers.Set("X-Frame-Options", "DENY")
+		headers.Set("Referrer-Policy", "no-referrer")
+		headers.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		headers.Set("Cross-Origin-Opener-Policy", "same-origin")
+		headers.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func authRateLimitSettings(cfg *config.Config) (int, time.Duration) {
 	limit := authVerifyRateLimit
 	window := authVerifyRateWindow
@@ -1250,7 +1263,7 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 		}
 	})
 	mux.Handle("/", webui.Handler())
-	return withRequestID(mux)
+	return withSecurityHeaders(withRequestID(mux))
 }
 
 func writeJSON(w http.ResponseWriter, value any) {

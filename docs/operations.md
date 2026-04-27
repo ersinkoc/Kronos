@@ -114,6 +114,13 @@ summary of agent capacity, inventory counts, active job counts, backup totals,
 readiness checks, attention counters, and the latest jobs/backups without
 scraping Prometheus text output.
 
+The control plane sends conservative browser security headers on API and WebUI
+responses, including `X-Content-Type-Options`, `X-Frame-Options`,
+`Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, and a
+same-origin content security policy. `Strict-Transport-Security` is deliberately
+left to TLS-terminating deployments because local mode commonly serves plain
+HTTP on loopback.
+
 ## Notifications
 
 Kronos can post webhook notifications when jobs reach a terminal state. Configure

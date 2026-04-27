@@ -146,6 +146,42 @@ func TestServerRequestIDHeader(t *testing.T) {
 	}
 }
 
+func TestServerSecurityHeaders(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(newServerHandler(nil))
+	defer server.Close()
+
+	for _, path := range []string{"/healthz", "/"} {
+		resp, err := server.Client().Get(server.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s error = %v", path, err)
+		}
+		resp.Body.Close()
+		headers := resp.Header
+		for name, want := range map[string]string{
+			"X-Content-Type-Options":     "nosniff",
+			"X-Frame-Options":            "DENY",
+			"Referrer-Policy":            "no-referrer",
+			"Permissions-Policy":         "camera=(), microphone=(), geolocation=()",
+			"Cross-Origin-Opener-Policy": "same-origin",
+		} {
+			if got := headers.Get(name); got != want {
+				t.Fatalf("GET %s %s = %q, want %q", path, name, got, want)
+			}
+		}
+		csp := headers.Get("Content-Security-Policy")
+		for _, want := range []string{"default-src 'self'", "frame-ancestors 'none'", "connect-src 'self'"} {
+			if !strings.Contains(csp, want) {
+				t.Fatalf("GET %s CSP = %q, missing %q", path, csp, want)
+			}
+		}
+		if hsts := headers.Get("Strict-Transport-Security"); hsts != "" {
+			t.Fatalf("GET %s Strict-Transport-Security = %q, want empty for local HTTP mode", path, hsts)
+		}
+	}
+}
+
 func TestAuditMetadataUsesRequestContext(t *testing.T) {
 	t.Parallel()
 
