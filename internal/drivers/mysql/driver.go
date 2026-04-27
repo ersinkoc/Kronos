@@ -147,7 +147,7 @@ func (execRunner) Run(ctx context.Context, name string, args []string, stdin []b
 }
 
 func mysqlDumpArgs(target drivers.Target) []string {
-	args := append(mysqlArgs(target),
+	args := append(mysqlConnectionArgs(target),
 		"--single-transaction",
 		"--routines",
 		"--triggers",
@@ -158,6 +158,10 @@ func mysqlDumpArgs(target drivers.Target) []string {
 }
 
 func mysqlArgs(target drivers.Target) []string {
+	return append(mysqlConnectionArgs(target), "--database", databaseName(target))
+}
+
+func mysqlConnectionArgs(target drivers.Target) []string {
 	host, port := splitAddress(target.Connection["addr"])
 	if value := strings.TrimSpace(target.Connection["host"]); value != "" {
 		host = value
@@ -171,7 +175,7 @@ func mysqlArgs(target drivers.Target) []string {
 	if port == "" {
 		port = "3306"
 	}
-	args := []string{"--host", host, "--port", port, "--database", databaseName(target)}
+	args := []string{"--host", host, "--port", port}
 	if username := strings.TrimSpace(firstNonEmpty(target.Connection["username"], target.Connection["user"])); username != "" {
 		args = append(args, "--user", username)
 	}

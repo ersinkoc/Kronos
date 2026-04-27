@@ -61,10 +61,13 @@ func TestDriverBackupFullUsesMysqlDump(t *testing.T) {
 		t.Fatalf("calls = %#v", runner.calls)
 	}
 	args := strings.Join(runner.calls[0].args, " ")
-	for _, want := range []string{"--host db.example", "--port 3307", "--database app", "--user backup", "--single-transaction", "--routines", "--triggers", "--events", "--set-gtid-purged=OFF", "app"} {
+	for _, want := range []string{"--host db.example", "--port 3307", "--user backup", "--single-transaction", "--routines", "--triggers", "--events", "--set-gtid-purged=OFF", "app"} {
 		if !strings.Contains(args, want) {
 			t.Fatalf("mysqldump args = %q, missing %q", args, want)
 		}
+	}
+	if strings.Contains(args, "--database app") {
+		t.Fatalf("mysqldump args include mysql-only --database flag: %q", args)
 	}
 	if strings.Contains(args, "secret") {
 		t.Fatalf("mysqldump args leaked password: %q", args)
