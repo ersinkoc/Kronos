@@ -606,6 +606,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Backup"
+        "404":
+          description: Backup not found
   /api/v1/backups/{id}/unprotect:
     post:
       summary: Disable manual protection
@@ -618,6 +620,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Backup"
+        "404":
+          description: Backup not found
   /api/v1/retention/plan:
     post:
       summary: Preview retention decisions
