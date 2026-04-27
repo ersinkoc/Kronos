@@ -2546,6 +2546,18 @@ func TestServerBackupsListInspectProtect(t *testing.T) {
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("POST protect missing status = %d, want 404", resp.StatusCode)
 	}
+	req, err = http.NewRequest(http.MethodPost, server.URL+"/api/v1/backups/missing/unprotect", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(unprotect missing) error = %v", err)
+	}
+	resp, err = server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("POST unprotect missing error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("POST unprotect missing status = %d, want 404", resp.StatusCode)
+	}
 }
 
 func TestParseBackupListTime(t *testing.T) {
