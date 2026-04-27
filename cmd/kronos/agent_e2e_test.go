@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kronos/kronos/internal/config"
 	"github.com/kronos/kronos/internal/core"
 	"github.com/kronos/kronos/internal/kvstore"
 	control "github.com/kronos/kronos/internal/server"
@@ -218,6 +219,84 @@ func TestE2EClaimFailsLostAgentJobAndUnblocksTarget(t *testing.T) {
 	}
 }
 
+func TestE2EServerRestartFailsPersistedActiveJobs(t *testing.T) {
+	dataDir := t.TempDir()
+	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
+	seedE2EJobs(t, dataDir, []core.Job{
+		{
+			ID:        "running-active",
+			AgentID:   "agent-restart",
+			TargetID:  "target-redis",
+			StorageID: "storage-local",
+			Type:      core.BackupTypeFull,
+			Status:    core.JobStatusRunning,
+			QueuedAt:  now.Add(-3 * time.Minute),
+			StartedAt: now.Add(-2 * time.Minute),
+		},
+		{
+			ID:        "finalizing-active",
+			AgentID:   "agent-restart",
+			TargetID:  "target-redis",
+			StorageID: "storage-local",
+			Type:      core.BackupTypeFull,
+			Status:    core.JobStatusFinalizing,
+			QueuedAt:  now.Add(-2 * time.Minute),
+			StartedAt: now.Add(-1 * time.Minute),
+		},
+		{
+			ID:        "queued-safe",
+			TargetID:  "target-redis",
+			StorageID: "storage-local",
+			Type:      core.BackupTypeFull,
+			Status:    core.JobStatusQueued,
+			QueuedAt:  now,
+		},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var out bytes.Buffer
+	err := serveControlPlaneWithOptions(ctx, &out, "127.0.0.1:0", &config.Config{
+		Server: config.ServerConfig{DataDir: dataDir},
+	}, controlPlaneOptions{OnListen: func(addr string) error {
+		defer cancel()
+		running := getE2EJob(t, "http://"+addr, "running-active")
+		if running.Status != core.JobStatusFailed || running.Error != "server_lost" {
+			t.Fatalf("running-active over HTTP = %#v", running)
+		}
+		queued := getE2EJob(t, "http://"+addr, "queued-safe")
+		if queued.Status != core.JobStatusQueued {
+			t.Fatalf("queued-safe over HTTP = %#v", queued)
+		}
+		return nil
+	}})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("serveControlPlaneWithOptions() error = %v, want context.Canceled", err)
+	}
+	if !strings.Contains(out.String(), "recovered_failed_jobs=2") {
+		t.Fatalf("server output = %q, want recovered_failed_jobs=2", out.String())
+	}
+
+	reopened, err := kvstore.Open(filepath.Join(dataDir, "state.db"))
+	if err != nil {
+		t.Fatalf("Open(restarted state) error = %v", err)
+	}
+	defer reopened.Close()
+	store, err := control.NewJobStore(reopened)
+	if err != nil {
+		t.Fatalf("NewJobStore(restarted state) error = %v", err)
+	}
+	for _, id := range []core.ID{"running-active", "finalizing-active"} {
+		job, ok, err := store.Get(id)
+		if err != nil || !ok || job.Status != core.JobStatusFailed || job.Error != "server_lost" || job.EndedAt.IsZero() {
+			t.Fatalf("Get(%s) = %#v ok=%v err=%v", id, job, ok, err)
+		}
+	}
+	queued, ok, err := store.Get("queued-safe")
+	if err != nil || !ok || queued.Status != core.JobStatusQueued {
+		t.Fatalf("Get(queued-safe) = %#v ok=%v err=%v", queued, ok, err)
+	}
+}
+
 func enqueueE2EBackup(t *testing.T, server *httptest.Server, targetID, storageID core.ID) core.Job {
 	t.Helper()
 
@@ -262,6 +341,45 @@ func enqueueE2ERestore(t *testing.T, server *httptest.Server, backupID, targetID
 		t.Fatalf("restore response = %#v", response)
 	}
 	return response.Job
+}
+
+func seedE2EJobs(t *testing.T, dataDir string, jobs []core.Job) {
+	t.Helper()
+
+	db, err := kvstore.Open(filepath.Join(dataDir, "state.db"))
+	if err != nil {
+		t.Fatalf("Open(seed state) error = %v", err)
+	}
+	defer db.Close()
+	store, err := control.NewJobStore(db)
+	if err != nil {
+		t.Fatalf("NewJobStore(seed state) error = %v", err)
+	}
+	for _, job := range jobs {
+		if err := store.Save(job); err != nil {
+			t.Fatalf("Save(seed job %s) error = %v", job.ID, err)
+		}
+	}
+}
+
+func getE2EJob(t *testing.T, serverURL string, id core.ID) core.Job {
+	t.Helper()
+
+	client := http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(serverURL + "/api/v1/jobs/" + string(id))
+	if err != nil {
+		t.Fatalf("GET /api/v1/jobs/%s error = %v", id, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("GET /api/v1/jobs/%s status=%d body=%s", id, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var job core.Job
+	if err := json.NewDecoder(resp.Body).Decode(&job); err != nil {
+		t.Fatalf("Decode(job %s) error = %v", id, err)
+	}
+	return job
 }
 
 func postE2EHeartbeat(t *testing.T, server *httptest.Server, heartbeat control.AgentHeartbeat) {
