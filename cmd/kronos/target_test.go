@@ -137,12 +137,12 @@ func TestRunTargetTestRejectsUnimplementedDrivers(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	err := run(context.Background(), &out, []string{"target", "test", "--driver", "postgres", "--endpoint", "127.0.0.1:5432"})
+	err := run(context.Background(), &out, []string{"target", "test", "--driver", "mysql", "--endpoint", "127.0.0.1:3306"})
 	if err == nil {
-		t.Fatal("target test postgres error = nil, want unsupported driver error")
+		t.Fatal("target test mysql error = nil, want unsupported driver error")
 	}
 	text := err.Error()
-	if !strings.Contains(text, "not implemented") || !strings.Contains(text, "supported target drivers: redis") {
+	if !strings.Contains(text, "not implemented") || !strings.Contains(text, "supported target drivers: postgres, redis") {
 		t.Fatalf("target test error = %q", text)
 	}
 }

@@ -243,7 +243,7 @@ func targetConnection(target core.Target) map[string]string {
 	if target.Database != "" {
 		out["database"] = target.Database
 	}
-	for _, key := range []string{"host", "port", "username", "password", "tls"} {
+	for _, key := range []string{"host", "port", "username", "password", "tls", "sslmode", "dsn"} {
 		if value := optionString(target.Options, key); value != "" {
 			out[key] = value
 		}
