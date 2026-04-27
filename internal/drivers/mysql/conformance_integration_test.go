@@ -39,6 +39,9 @@ func TestMySQLDriverConformanceBackupRestore(t *testing.T) {
 	restoreAdmin := mysqlTestTarget(restoreAddr, "", restoreUser, restorePassword)
 	sourceTarget := mysqlTestTarget(sourceAddr, sourceDB, sourceUser, sourcePassword)
 	restoreTarget := mysqlTestTarget(restoreAddr, restoreDB, restoreUser, restorePassword)
+	if value := strings.TrimSpace(os.Getenv("KRONOS_MYSQL_DUMP_SET_GTID_PURGED")); value != "" {
+		sourceTarget.Options = map[string]string{"set_gtid_purged": value}
+	}
 
 	cleanupDatabase(t, ctx, sourceAdmin, sourceDB)
 	cleanupDatabase(t, ctx, restoreAdmin, restoreDB)

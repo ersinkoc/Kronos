@@ -81,6 +81,28 @@ func TestDriverBackupFullUsesMysqlDump(t *testing.T) {
 	}
 }
 
+func TestDriverBackupFullCanDisableGTIDPurged(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{outputs: [][]byte{[]byte("create table users(id int);\n")}}
+	driver := &Driver{runner: runner}
+	target := drivers.Target{
+		Connection: map[string]string{
+			"database": "app",
+		},
+		Options: map[string]string{
+			"set_gtid_purged": "false",
+		},
+	}
+	if _, err := driver.BackupFull(context.Background(), target, &drivers.MemoryRecordStream{}); err != nil {
+		t.Fatalf("BackupFull() error = %v", err)
+	}
+	args := strings.Join(runner.calls[0].args, " ")
+	if strings.Contains(args, "--set-gtid-purged") {
+		t.Fatalf("mysqldump args include disabled GTID option: %q", args)
+	}
+}
+
 func TestDriverBackupFullRequiresWriter(t *testing.T) {
 	t.Parallel()
 
