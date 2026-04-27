@@ -260,7 +260,8 @@ groups:
    driver writes a separate `postgres_globals` stream from
    `pg_dumpall --globals-only --no-role-passwords` before the database stream.
    The main CI workflow runs this conformance suite against PostgreSQL 15, 16,
-   and 17 with matching client binaries.
+   and 17 with matching client binaries, and also runs a PostgreSQL 15-to-17
+   restore rehearsal against separate source and target service containers.
 
 2. Publish an immutable release from a signed tag when cutting a production
    version:

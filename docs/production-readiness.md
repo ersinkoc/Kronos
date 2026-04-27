@@ -11,9 +11,10 @@ extension-backed data, large objects, restore guardrails, rollback behavior for
 failed restores, a 2,500-row indexed JSONB restore rehearsal, and optional
 PostgreSQL global role metadata capture through `include_globals=true` without
 leaking role password material, plus a focused `postgres_globals` restore drill
-for role metadata. It still needs larger operator-scale restore drills and
-broader upgrade rehearsals before it should be treated as a fully
-production-grade PostgreSQL path. The full product vision
+for role metadata. CI also runs a PostgreSQL 15-to-17 restore rehearsal. It
+still needs larger operator-scale restore drills and broader upgrade
+rehearsals before it should be treated as a fully production-grade PostgreSQL
+path. The full product vision
 across MySQL,
 MongoDB, SFTP, Azure Blob, Google Cloud Storage, deeper WebUI workflows, and
 multi-instance control-plane operation is still roadmap work.
@@ -23,7 +24,7 @@ multi-instance control-plane operation is still roadmap work.
 | Scope | Estimate | Notes |
 | --- | ---: | --- |
 | Implemented Redis/local/S3 path | 93% | Core pipeline, agent/server flow, lost-agent recovery, server restart recovery, restore planning, retention, audit, metrics, release scripts, Kubernetes examples, runbooks, a reusable production gate, and tagged worker/control-plane/Redis backup, restore, retention apply, and recovery E2E tests are in place. |
-| Broad multi-database product vision | 84% | Redis is executable, PostgreSQL now has a plain SQL logical driver MVP, optional global role metadata capture and focused global restore coverage in real-service conformance, worker pipeline smoke E2E coverage, and CI conformance coverage across PostgreSQL 15, 16, and 17 for extension-backed data, large objects, indexed JSONB bulk restore, restore guardrails, and rollback behavior. MySQL, MongoDB, storage backends, WebUI workflows, and multi-instance deployment patterns remain roadmap work. |
+| Broad multi-database product vision | 85% | Redis is executable, PostgreSQL now has a plain SQL logical driver MVP, optional global role metadata capture and focused global restore coverage in real-service conformance, worker pipeline smoke E2E coverage, CI conformance coverage across PostgreSQL 15, 16, and 17, and a PostgreSQL 15-to-17 restore rehearsal for extension-backed data, large objects, indexed JSONB bulk restore, restore guardrails, and rollback behavior. MySQL, MongoDB, storage backends, WebUI workflows, and multi-instance deployment patterns remain roadmap work. |
 | Current repository release hygiene | 99% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, GitHub build/SBOM attestations, keyless cosign signatures and verification, consumer release verification docs, CI govulncheck, release artifact smoke checks, PostgreSQL service conformance, the production check script, tagged backup/restore/retention/recovery E2E coverage, and Node 24-native GitHub Actions are present. The `golang.org/x/crypto` advisories are fixed. |
 
 ## Current Release Gate
@@ -52,8 +53,8 @@ executes `kronos version`.
   `pg_dumpall --globals-only --no-role-passwords` role metadata capture with a
   real-service conformance assertion, focused `postgres_globals` restore checks
   for role metadata, `replace_existing` enforcement for non-dry-run restores,
-  single-transaction `psql` execution, and rollback verification for failed
-  restores.
+  single-transaction `psql` execution, rollback verification for failed
+  restores, and a PostgreSQL 15-to-17 restore rehearsal.
 - Local and S3-compatible storage backends.
 - Persistent control plane state, scheduler state, jobs, backups, retention,
   notifications, users, tokens, and audit log.
@@ -64,10 +65,10 @@ executes `kronos version`.
   provenance metadata, SBOM metadata, GitHub build/SBOM attestations, keyless
   cosign release signatures and verification, and Kubernetes examples.
 - CI runs formatting, vet, staticcheck, govulncheck, race tests, PostgreSQL
-  15/16/17 service conformance, release artifact verification, container builds,
-  completion syntax checks, and the production-readiness gate. Release
-  artifacts are also smoke-tested by executing the host binary and validating
-  generated shell completion.
+  15/16/17 service conformance, PostgreSQL 15-to-17 restore rehearsal, release
+  artifact verification, container builds, completion syntax checks, and the
+  production-readiness gate. Release artifacts are also smoke-tested by
+  executing the host binary and validating generated shell completion.
 - Tagged E2E coverage exercises a control-plane HTTP server, worker agent,
   local repository storage, and Redis-compatible RESP target together for
   backup and restore. It also covers retention apply over committed backup
@@ -83,8 +84,8 @@ executes `kronos version`.
 ## Blocking Work Before Calling The Whole Product Production-Ready
 
 1. Harden PostgreSQL operational behavior around full-cluster global-object
-   restore rehearsals, operator-scale restore drills, and upgrade rehearsal
-   evidence.
+   restore rehearsals, operator-scale restore drills, and broader upgrade
+   rehearsal evidence.
 2. Extend E2E coverage into more retention policy edge cases and release
    verification drills.
 3. Expand the WebUI from dashboard shell into live resource CRUD, job detail,
@@ -97,7 +98,8 @@ executes `kronos version`.
 ## Next Engineering Slices
 
 1. Extend PostgreSQL hardening around full-cluster global-object restore
-   rehearsals, operator-scale restore drills, and upgrade rehearsal evidence.
+   rehearsals, operator-scale restore drills, and broader upgrade rehearsal
+   evidence.
 2. WebUI live API wiring for overview, jobs, backups, agents, and readiness.
 3. Production deployment hardening for single-replica Kubernetes and external
    secret management.
