@@ -130,8 +130,8 @@ See [Production Readiness](production-readiness.md) for the current release
 gate, readiness estimate, and next engineering slices.
 
 Kronos is usable for its implemented Redis/local/S3-oriented paths, and now has
-a PostgreSQL logical driver MVP. It is not yet a broad multi-database
-production suite. The largest remaining areas are:
+PostgreSQL, MySQL/MariaDB, and MongoDB logical driver MVPs. It is not yet a
+broad multi-database production suite. The largest remaining areas are:
 
 - PostgreSQL operational hardening. Current PostgreSQL driver coverage includes
   command-runner unit coverage over `pg_dump` and `psql`, tagged worker
@@ -150,11 +150,13 @@ production suite. The largest remaining areas are:
   10,000 indexed JSONB rows across separate source and target services.
   Remaining hardening is around broader upgrade rehearsal evidence.
 - Additional database driver depth. Current executable driver coverage is
-  Redis/Valkey, the PostgreSQL logical MVP, and a MySQL/MariaDB
+  Redis/Valkey, the PostgreSQL logical MVP, a MySQL/MariaDB
   `mysqldump`/`mysql` logical MVP with unit coverage plus real-service MySQL
   8.4 and MariaDB 11.4 conformance for backup/restore of indexed JSON data,
   bidirectional MySQL/MariaDB restore rehearsals, and 10,000-row
-  MySQL/MariaDB restore drills. MongoDB remains roadmap work.
+  MySQL/MariaDB restore drills, and a MongoDB `mongodump`/`mongorestore`
+  archive MVP with unit coverage. MongoDB still needs real-service
+  conformance and restore rehearsal coverage.
 - Additional storage backends such as SFTP, Azure Blob, and Google Cloud
   Storage. Current executable backends are local filesystem and S3-compatible
   object storage.
@@ -167,8 +169,9 @@ production suite. The largest remaining areas are:
 
 ## Next Best Work
 
-1. Extend PostgreSQL hardening around broader upgrade rehearsal evidence.
-2. Wire the WebUI to live API endpoints for dashboard state, jobs, backups, and
+1. Add MongoDB real-service conformance and restore rehearsal coverage.
+2. Extend PostgreSQL hardening around broader upgrade rehearsal evidence.
+3. Wire the WebUI to live API endpoints for dashboard state, jobs, backups, and
    agents.
 4. Add additional notification channels and hook execution surfaces.
 5. Run a signed-tag release rehearsal and archive checksum, signature, and

@@ -46,7 +46,8 @@ This repository currently has the Phase 0 foundation in place and active Phase
   MySQL/MariaDB has a `mysqldump`/`mysql` logical MVP with real-service MySQL
   8.4, MariaDB 11.4, and bidirectional MySQL/MariaDB restore rehearsal
   coverage in CI, plus 10,000-row MySQL and MariaDB restore drills. MongoDB
-  remains a roadmap driver in this build.
+  now has a `mongodump`/`mongorestore` archive MVP with deterministic unit
+  coverage; real-service MongoDB conformance remains pending.
 - CLI: dispatcher, version, database repair,
   backup now/list/inspect/protect/unprotect/verification,
   target/storage add/list/inspect/update/remove, schedule add/list/inspect/pause/resume/remove,

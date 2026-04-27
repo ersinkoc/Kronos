@@ -108,9 +108,11 @@ matching MySQL or MariaDB client tools on worker agents before using it. MySQL
 restore also requires explicit replace-existing intent. CI exercises this path
 against real MySQL 8.4 and MariaDB 11.4 services with backup/restore
 rehearsals for indexed JSON data, plus bidirectional MySQL/MariaDB restore
-rehearsals and 10,000-row MySQL/MariaDB restore drills. MongoDB is still a
-roadmap driver and fails fast with an explicit unsupported-driver error when
-probed or executed.
+rehearsals and 10,000-row MySQL/MariaDB restore drills. MongoDB has a logical
+backup/restore MVP that shells out to `mongodump` and `mongorestore` archive
+streams; install MongoDB Database Tools on worker agents before using it.
+MongoDB restores also require explicit replace-existing intent. Real-service
+MongoDB conformance is still pending.
 
 ## 6. Run A Backup
 

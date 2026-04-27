@@ -51,6 +51,8 @@ kronos target add --name pg --driver postgres --endpoint 127.0.0.1:5432 --databa
 kronos target test pg --driver postgres --endpoint 127.0.0.1:5432 --database app --user backup --password "$POSTGRES_PASSWORD" --tls disable
 kronos target add --name mysql --driver mysql --endpoint 127.0.0.1:3306 --database app --user backup --password "$MYSQL_PASSWORD" --agent agent-1
 kronos target test mysql --driver mysql --endpoint 127.0.0.1:3306 --database app --user backup --password "$MYSQL_PASSWORD"
+kronos target add --name mongo --driver mongodb --endpoint 127.0.0.1:27017 --database app --user backup --password "$MONGODB_PASSWORD" --agent agent-1
+kronos target test mongo --driver mongodb --endpoint 127.0.0.1:27017 --database app --user backup --password "$MONGODB_PASSWORD"
 kronos target list
 kronos target inspect --id target-1
 kronos target update --id target-1 --name redis --driver redis --endpoint 127.0.0.1:6380 --agent agent-2

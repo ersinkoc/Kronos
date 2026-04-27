@@ -1,6 +1,6 @@
 # Kronos Architecture
 
-Kronos is a zero-dependency Go backup platform for scheduled, encrypted, verified database backups. The repository is currently beyond a skeleton: it contains the core CLI, a control-plane HTTP server, embedded state storage, scheduler orchestration, agent workers, backup and restore pipelines, manifest verification, retention planning, audit logging, webhook notifications, local and S3-compatible storage backends, Redis driver support, a PostgreSQL logical driver MVP, OpenAPI coverage, an operations overview API, and an embedded React/Tailwind WebUI shell.
+Kronos is a zero-dependency Go backup platform for scheduled, encrypted, verified database backups. The repository is currently beyond a skeleton: it contains the core CLI, a control-plane HTTP server, embedded state storage, scheduler orchestration, agent workers, backup and restore pipelines, manifest verification, retention planning, audit logging, webhook notifications, local and S3-compatible storage backends, Redis driver support, PostgreSQL, MySQL/MariaDB, and MongoDB logical driver MVPs, OpenAPI coverage, an operations overview API, and an embedded React/Tailwind WebUI shell.
 
 The project is still in active implementation. The architectural foundation is in place and heavily tested, while broader database driver coverage and some product surfaces described in `.project/IMPLEMENTATION.md` remain roadmap work.
 
@@ -597,7 +597,7 @@ make ui
 | Chunk pipeline | Implemented | FastCDC, BLAKE3, dedup index, compression, encryption envelopes, bounded worker graph. |
 | Manifests | Implemented | Signed manifests, commit/load helpers, verification. |
 | Storage | Partially implemented | Local filesystem and S3-compatible backend exist; SFTP/Azure/GCS domain kinds fail fast with explicit unsupported-backend errors. |
-| Drivers | Partially implemented | Redis/Valkey driver exists; PostgreSQL has a `pg_dump`/`psql` logical MVP with optional `pg_dumpall --globals-only` role metadata capture, multi-version conformance, 15-to-17 restore rehearsal, full global restore rehearsal coverage, and a 10,000-row restore drill; MySQL/MariaDB has a `mysqldump`/`mysql` logical MVP with real-service MySQL 8.4, MariaDB 11.4, bidirectional restore rehearsal conformance, and 10,000-row MySQL/MariaDB restore drills; memory test driver exists; MongoDB remains planned in the blueprint. |
+| Drivers | Partially implemented | Redis/Valkey driver exists; PostgreSQL has a `pg_dump`/`psql` logical MVP with optional `pg_dumpall --globals-only` role metadata capture, multi-version conformance, 15-to-17 restore rehearsal, full global restore rehearsal coverage, and a 10,000-row restore drill; MySQL/MariaDB has a `mysqldump`/`mysql` logical MVP with real-service MySQL 8.4, MariaDB 11.4, bidirectional restore rehearsal conformance, and 10,000-row MySQL/MariaDB restore drills; MongoDB has a `mongodump`/`mongorestore` archive MVP with unit coverage; memory test driver exists. |
 | Retention | Implemented foundation | Count, time, size, and GFS planning plus server-side policy endpoints. |
 | Notifications | Implemented foundation | Webhook rules for terminal job events, optional HMAC signatures, bounded retries, API/CLI management, and audit metadata. |
 | WebUI | Early product surface | Embedded React/Tailwind operations dashboard build is served by the control plane; live dashboard API support now exists through `/api/v1/overview`. |
@@ -624,6 +624,7 @@ Use this section as a fast path from architecture concepts to code.
 | Cron/window schedule parsing | `internal/schedule/cron.go`, `internal/schedule/window.go` |
 | Driver contract | `internal/drivers/driver.go` |
 | Redis driver | `internal/drivers/redis/driver.go` |
+| MongoDB driver | `internal/drivers/mongodb/driver.go` |
 | Backup/restore engine bridge | `internal/engine/backup.go` |
 | Chunk pipeline | `internal/chunk/pipeline.go` |
 | FastCDC chunker | `internal/chunk/fastcdc.go` |
@@ -661,7 +662,7 @@ flowchart TD
     Backbone --> Pipeline[Backup pipeline]
     Backbone --> Verify[Verification]
 
-    Gaps --> MoreDrivers[Production-grade Postgres, MySQL/MariaDB, and MongoDB drivers]
+    Gaps --> MoreDrivers[Production-grade database drivers]
     Gaps --> MoreStorage[SFTP, Azure Blob, GCS, WebDAV backends]
     Gaps --> Auth[Advanced auth flows and hardening]
     Gaps --> Notifications[Notifications, hooks, and routing]
@@ -671,8 +672,8 @@ flowchart TD
 
 Recommended next engineering slices:
 
-1. Extend PostgreSQL hardening around broader upgrade rehearsal evidence.
-2. Expand database driver coverage to MongoDB.
+1. Add MongoDB real-service conformance and restore rehearsal coverage.
+2. Extend PostgreSQL hardening around broader upgrade rehearsal evidence.
 3. Deepen the WebUI from operational dashboard shell into resource CRUD and job detail workflows.
 4. Add storage backend parity for the domain-level kinds already present in `core.StorageKind`.
 5. Harden production auth, token lifecycle, and audit coverage around every mutation.
