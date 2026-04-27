@@ -1,6 +1,6 @@
 # Kronos Architecture
 
-Kronos is a zero-dependency Go backup platform for scheduled, encrypted, verified database backups. The repository is currently beyond a skeleton: it contains the core CLI, a control-plane HTTP server, embedded state storage, scheduler orchestration, agent workers, backup and restore pipelines, manifest verification, retention planning, audit logging, webhook notifications, local and S3-compatible storage backends, Redis driver support, OpenAPI coverage, an operations overview API, and an embedded React/Tailwind WebUI shell.
+Kronos is a zero-dependency Go backup platform for scheduled, encrypted, verified database backups. The repository is currently beyond a skeleton: it contains the core CLI, a control-plane HTTP server, embedded state storage, scheduler orchestration, agent workers, backup and restore pipelines, manifest verification, retention planning, audit logging, webhook notifications, local and S3-compatible storage backends, Redis driver support, a PostgreSQL logical driver MVP, OpenAPI coverage, an operations overview API, and an embedded React/Tailwind WebUI shell.
 
 The project is still in active implementation. The architectural foundation is in place and heavily tested, while broader database driver coverage and some product surfaces described in `.project/IMPLEMENTATION.md` remain roadmap work.
 
@@ -46,7 +46,7 @@ flowchart LR
     active --> redis[Redis backup driver]
     active --> notify[Webhook notifications with HMAC and retries]
 
-    next --> drivers[Postgres, MySQL, MongoDB drivers]
+    next --> drivers[Production-grade Postgres, MySQL, MongoDB drivers]
     next --> storageMore[SFTP, Azure, GCS backends]
     next --> hooks[Additional notification channels and hooks]
     next --> advanced[Advanced auth and operations polish]
@@ -597,7 +597,7 @@ make ui
 | Chunk pipeline | Implemented | FastCDC, BLAKE3, dedup index, compression, encryption envelopes, bounded worker graph. |
 | Manifests | Implemented | Signed manifests, commit/load helpers, verification. |
 | Storage | Partially implemented | Local filesystem and S3-compatible backend exist; SFTP/Azure/GCS domain kinds fail fast with explicit unsupported-backend errors. |
-| Drivers | Partially implemented | Redis/Valkey driver exists; memory test driver exists; Postgres/MySQL/MongoDB fail fast and remain planned in the blueprint. |
+| Drivers | Partially implemented | Redis/Valkey driver exists; PostgreSQL has a `pg_dump`/`psql` logical MVP; memory test driver exists; MySQL/MongoDB fail fast and remain planned in the blueprint. |
 | Retention | Implemented foundation | Count, time, size, and GFS planning plus server-side policy endpoints. |
 | Notifications | Implemented foundation | Webhook rules for terminal job events, optional HMAC signatures, bounded retries, API/CLI management, and audit metadata. |
 | WebUI | Early product surface | Embedded React/Tailwind operations dashboard build is served by the control plane; live dashboard API support now exists through `/api/v1/overview`. |
@@ -661,7 +661,7 @@ flowchart TD
     Backbone --> Pipeline[Backup pipeline]
     Backbone --> Verify[Verification]
 
-    Gaps --> MoreDrivers[Production-grade Postgres, MySQL, MongoDB drivers]
+    Gaps --> MoreDrivers[Production-grade Postgres plus MySQL and MongoDB drivers]
     Gaps --> MoreStorage[SFTP, Azure Blob, GCS, WebDAV backends]
     Gaps --> Auth[Advanced auth flows and hardening]
     Gaps --> Notifications[Notifications, hooks, and routing]
@@ -671,8 +671,8 @@ flowchart TD
 
 Recommended next engineering slices:
 
-1. Expand database driver coverage, starting with the highest-value production target.
-2. Add end-to-end tests that run `server + agent + storage + driver` together.
+1. Add PostgreSQL conformance and E2E tests with a real service and restore verification.
+2. Expand database driver coverage to MySQL and MongoDB.
 3. Deepen the WebUI from operational dashboard shell into resource CRUD and job detail workflows.
 4. Add storage backend parity for the domain-level kinds already present in `core.StorageKind`.
 5. Harden production auth, token lifecycle, and audit coverage around every mutation.

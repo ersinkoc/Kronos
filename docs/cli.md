@@ -47,6 +47,8 @@ need `agent:write`, `job:write`, `target:read`, `storage:read`, and
 ```bash
 kronos target add --name redis --driver redis --endpoint 127.0.0.1:6379 --database 0 --user backup --password "$REDIS_PASSWORD" --tls disable --agent agent-1 --tier tier0
 kronos target test redis --driver redis --endpoint 127.0.0.1:6379 --database 0 --user backup --password "$REDIS_PASSWORD"
+kronos target add --name pg --driver postgres --endpoint 127.0.0.1:5432 --database app --user backup --password "$POSTGRES_PASSWORD" --tls disable --agent agent-1
+kronos target test pg --driver postgres --endpoint 127.0.0.1:5432 --database app --user backup --password "$POSTGRES_PASSWORD" --tls disable
 kronos target list
 kronos target inspect --id target-1
 kronos target update --id target-1 --name redis --driver redis --endpoint 127.0.0.1:6380 --agent agent-2

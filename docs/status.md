@@ -19,12 +19,14 @@ flowchart LR
     KV[(Embedded state DB)]
     Repo[(Backup repository)]
     Redis[(Redis target)]
+    Postgres[(PostgreSQL target)]
 
     CLI --> Server
     WebUI --> Server
     Server --> KV
     Server --> Agent
     Agent --> Redis
+    Agent --> Postgres
     Agent --> Repo
 ```
 
@@ -38,6 +40,8 @@ flowchart LR
   and manifest/chunk verification.
 - Redis backup and restore driver coverage, including ACL and command-stream
   replay paths.
+- PostgreSQL logical driver MVP using `pg_dump` plain SQL output for full
+  backups and `psql` for restores.
 - Persistent scheduler and queued/running/terminal job lifecycle.
 - Agent worker resource sync, heartbeat, job claim, backup execution, restore
   execution, and finish reporting.
@@ -123,12 +127,14 @@ recovery for active jobs reopened from persisted state:
 See [Production Readiness](production-readiness.md) for the current release
 gate, readiness estimate, and next engineering slices.
 
-Kronos is usable for its implemented Redis/local/S3-oriented paths, but it is
-not yet a broad multi-database production suite. The largest remaining areas
-are:
+Kronos is usable for its implemented Redis/local/S3-oriented paths, and now has
+a PostgreSQL logical driver MVP. It is not yet a broad multi-database
+production suite. The largest remaining areas are:
 
-- Additional database drivers such as PostgreSQL, MySQL, and MongoDB. Current
-  executable driver coverage is Redis/Valkey.
+- PostgreSQL real-service conformance and E2E tests. Current PostgreSQL driver
+  coverage is command-runner unit coverage over `pg_dump` and `psql`.
+- Additional database drivers such as MySQL and MongoDB. Current executable
+  driver coverage is Redis/Valkey plus the PostgreSQL logical MVP.
 - Additional storage backends such as SFTP, Azure Blob, and Google Cloud
   Storage. Current executable backends are local filesystem and S3-compatible
   object storage.
@@ -141,8 +147,8 @@ are:
 
 ## Next Best Work
 
-1. Add another first-class database driver, starting with the smallest useful
-   backup/restore slice and conformance tests.
+1. Add PostgreSQL conformance tests against a real service and verify restore
+   data.
 2. Wire the WebUI to live API endpoints for dashboard state, jobs, backups, and
    agents.
 3. Add additional notification channels and hook execution surfaces.

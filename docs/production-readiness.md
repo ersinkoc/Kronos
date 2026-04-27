@@ -3,17 +3,19 @@
 Last reviewed from the repository state on April 27, 2026.
 
 Kronos is close to production-ready for the implemented Redis or Valkey backup
-path with local or S3-compatible storage. It is not yet production-ready for
-the full product vision across PostgreSQL, MySQL, MongoDB, SFTP, Azure Blob,
-Google Cloud Storage, deeper WebUI workflows, and multi-instance control-plane
-operation.
+path with local or S3-compatible storage. A PostgreSQL logical backup/restore
+MVP is now present through `pg_dump` and `psql`, but it still needs
+database-level conformance and E2E coverage before it should be treated as a
+production-grade PostgreSQL path. The full product vision across MySQL,
+MongoDB, SFTP, Azure Blob, Google Cloud Storage, deeper WebUI workflows, and
+multi-instance control-plane operation is still roadmap work.
 
 ## Readiness Estimate
 
 | Scope | Estimate | Notes |
 | --- | ---: | --- |
 | Implemented Redis/local/S3 path | 93% | Core pipeline, agent/server flow, lost-agent recovery, server restart recovery, restore planning, retention, audit, metrics, release scripts, Kubernetes examples, runbooks, a reusable production gate, and tagged worker/control-plane/Redis backup, restore, retention apply, and recovery E2E tests are in place. |
-| Broad multi-database product vision | 70% | The architecture is strong, but major drivers, storage backends, WebUI workflows, and multi-instance deployment patterns remain roadmap work. |
+| Broad multi-database product vision | 73% | Redis is executable, PostgreSQL now has a plain SQL logical driver MVP, and the architecture is strong. MySQL, MongoDB, storage backends, WebUI workflows, and multi-instance deployment patterns remain roadmap work. |
 | Current repository release hygiene | 92% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, CI govulncheck, release artifact smoke checks, the production check script, and tagged backup/restore/retention/recovery E2E coverage are present. The `golang.org/x/crypto` advisories are fixed. |
 
 ## Current Release Gate
@@ -33,6 +35,8 @@ executes `kronos version`.
 - Core streaming backup pipeline with chunking, compression, encryption
   envelopes, signed manifests, restore planning, and verification.
 - Redis/Valkey driver coverage with backup and restore paths.
+- PostgreSQL logical driver MVP using `pg_dump` for full backups and `psql` for
+  restores, with deterministic command-runner unit tests.
 - Local and S3-compatible storage backends.
 - Persistent control plane state, scheduler state, jobs, backups, retention,
   notifications, users, tokens, and audit log.
@@ -57,8 +61,8 @@ executes `kronos version`.
 
 ## Blocking Work Before Calling The Whole Product Production-Ready
 
-1. Add at least one more first-class database driver, starting with PostgreSQL
-   or MySQL, plus backup and restore conformance tests.
+1. Add PostgreSQL conformance and E2E coverage against a real PostgreSQL
+   service, including restore verification.
 2. Extend E2E coverage into more retention policy edge cases and release
    provenance signing.
 3. Expand the WebUI from dashboard shell into live resource CRUD, job detail,
@@ -69,7 +73,7 @@ executes `kronos version`.
 
 ## Next Engineering Slices
 
-1. PostgreSQL driver MVP with schema/data backup and restore smoke tests.
+1. PostgreSQL driver conformance tests with a real PostgreSQL service.
 2. WebUI live API wiring for overview, jobs, backups, agents, and readiness.
 3. Production deployment hardening for single-replica Kubernetes and external
    secret management.
