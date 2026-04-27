@@ -88,7 +88,7 @@ func TestReleaseWorkflowPublishesArtifacts(t *testing.T) {
 		"./scripts/sbom.sh",
 		"./scripts/verify-release.sh",
 		"./scripts/smoke-release.sh",
-		"actions/upload-artifact@v4",
+		"actions/upload-artifact@v7",
 		"gh release create",
 	} {
 		if !strings.Contains(text, want) {
