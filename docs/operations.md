@@ -256,6 +256,9 @@ groups:
    Set `KRONOS_POSTGRES_RESTORE_DSN` when restore verification should target a
    different database than the source. PostgreSQL non-dry-run restores require
    explicit replace-existing intent and run through `psql --single-transaction`.
+   For role metadata coverage, add target option `include_globals=true`; the
+   driver writes a separate `postgres_globals` stream from
+   `pg_dumpall --globals-only --no-role-passwords` before the database stream.
 
 2. Publish an immutable release from a signed tag when cutting a production
    version:
@@ -461,7 +464,10 @@ request ID in the error text when the server provides one.
    Point-in-time restore timestamps supplied with `--at` must be RFC3339 values
    and cannot be in the future. PostgreSQL restore jobs must include
    `--replace-existing --yes`; dry-run restore previews remain available
-   without that destructive-operation confirmation.
+   without that destructive-operation confirmation. Backups created with
+   `include_globals=true` replay the `postgres_globals` stream before the
+   database SQL stream, so rehearse them against disposable restore targets
+   before using the option for production cutovers.
 
 5. Verify the audit chain after recovery:
 

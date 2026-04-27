@@ -138,9 +138,11 @@ production suite. The largest remaining areas are:
   pipeline smoke E2E coverage with fake client tools, and CI real-service
   conformance with restore data verification for extension-backed data, large
   objects, explicit `replace_existing=true` guardrails, single-transaction
-  `psql` execution, and rollback behavior for failed restores. Remaining
-  hardening is around roles, global objects, version compatibility, and larger
-  restore drills.
+  `psql` execution, rollback behavior for failed restores, and optional
+  `include_globals=true` capture of PostgreSQL role metadata through
+  `pg_dumpall --globals-only --no-role-passwords`. Remaining hardening is around
+  version compatibility, richer global-object restore drills, and larger restore
+  rehearsals.
 - Additional database drivers such as MySQL and MongoDB. Current executable
   driver coverage is Redis/Valkey plus the PostgreSQL logical MVP.
 - Additional storage backends such as SFTP, Azure Blob, and Google Cloud
@@ -155,8 +157,8 @@ production suite. The largest remaining areas are:
 
 ## Next Best Work
 
-1. Extend PostgreSQL hardening around roles, global objects, version
-   compatibility, and larger restore drills.
+1. Extend PostgreSQL hardening around version compatibility, richer
+   global-object restore drills, and larger restore rehearsals.
 2. Wire the WebUI to live API endpoints for dashboard state, jobs, backups, and
    agents.
 3. Add additional notification channels and hook execution surfaces.

@@ -597,7 +597,7 @@ make ui
 | Chunk pipeline | Implemented | FastCDC, BLAKE3, dedup index, compression, encryption envelopes, bounded worker graph. |
 | Manifests | Implemented | Signed manifests, commit/load helpers, verification. |
 | Storage | Partially implemented | Local filesystem and S3-compatible backend exist; SFTP/Azure/GCS domain kinds fail fast with explicit unsupported-backend errors. |
-| Drivers | Partially implemented | Redis/Valkey driver exists; PostgreSQL has a `pg_dump`/`psql` logical MVP; memory test driver exists; MySQL/MongoDB fail fast and remain planned in the blueprint. |
+| Drivers | Partially implemented | Redis/Valkey driver exists; PostgreSQL has a `pg_dump`/`psql` logical MVP with optional `pg_dumpall --globals-only` role metadata capture; memory test driver exists; MySQL/MongoDB fail fast and remain planned in the blueprint. |
 | Retention | Implemented foundation | Count, time, size, and GFS planning plus server-side policy endpoints. |
 | Notifications | Implemented foundation | Webhook rules for terminal job events, optional HMAC signatures, bounded retries, API/CLI management, and audit metadata. |
 | WebUI | Early product surface | Embedded React/Tailwind operations dashboard build is served by the control plane; live dashboard API support now exists through `/api/v1/overview`. |
@@ -671,7 +671,7 @@ flowchart TD
 
 Recommended next engineering slices:
 
-1. Extend PostgreSQL hardening around roles, global objects, version compatibility, and larger restore drills.
+1. Extend PostgreSQL hardening around version compatibility, richer global-object restore drills, and larger restore rehearsals.
 2. Expand database driver coverage to MySQL and MongoDB.
 3. Deepen the WebUI from operational dashboard shell into resource CRUD and job detail workflows.
 4. Add storage backend parity for the domain-level kinds already present in `core.StorageKind`.
