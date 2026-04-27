@@ -14,7 +14,10 @@ import (
 	"github.com/kronos/kronos/internal/manifest"
 )
 
-const databaseObjectKind = "database"
+const (
+	databaseObjectKind = "database"
+	globalsObjectKind  = "postgres_globals"
+)
 
 // Driver implements PostgreSQL logical backup with pg_dump plain SQL output.
 type Driver struct {
@@ -57,6 +60,25 @@ func (d *Driver) BackupFull(ctx context.Context, target drivers.Target, w driver
 	if w == nil {
 		return drivers.ResumePoint{}, fmt.Errorf("record writer is required")
 	}
+	position := "pg_dump:plain"
+	if includeGlobals(target) {
+		payload, err := d.run(ctx, "pg_dumpall", []string{
+			"--globals-only",
+			"--no-role-passwords",
+			"--dbname", postgresDSN(target),
+		}, nil)
+		if err != nil {
+			return drivers.ResumePoint{}, err
+		}
+		obj := drivers.ObjectRef{Name: "globals", Kind: globalsObjectKind}
+		if err := w.WriteRecord(obj, payload); err != nil {
+			return drivers.ResumePoint{}, err
+		}
+		if err := w.FinishObject(obj, 0); err != nil {
+			return drivers.ResumePoint{}, err
+		}
+		position = "pg_dumpall:globals+pg_dump:plain"
+	}
 	payload, err := d.run(ctx, "pg_dump", []string{
 		"--format=plain",
 		"--no-owner",
@@ -73,7 +95,7 @@ func (d *Driver) BackupFull(ctx context.Context, target drivers.Target, w driver
 	if err := w.FinishObject(obj, 0); err != nil {
 		return drivers.ResumePoint{}, err
 	}
-	return drivers.ResumePoint{Driver: d.Name(), Position: "pg_dump:plain"}, nil
+	return drivers.ResumePoint{Driver: d.Name(), Position: position}, nil
 }
 
 // BackupIncremental is not supported by plain pg_dump logical backups.
@@ -100,7 +122,7 @@ func (d *Driver) Restore(ctx context.Context, target drivers.Target, r drivers.R
 		if err != nil {
 			return err
 		}
-		if record.Done || record.Object.Kind != databaseObjectKind {
+		if record.Done || !isRestorableObject(record.Object.Kind) {
 			continue
 		}
 		if opts.DryRun {
@@ -114,6 +136,10 @@ func (d *Driver) Restore(ctx context.Context, target drivers.Target, r drivers.R
 			return err
 		}
 	}
+}
+
+func isRestorableObject(kind string) bool {
+	return kind == databaseObjectKind || kind == globalsObjectKind
 }
 
 // ReplayStream is reserved for WAL or logical replication replay.
@@ -199,6 +225,22 @@ func databaseName(target drivers.Target) string {
 		return value
 	}
 	return "postgres"
+}
+
+func includeGlobals(target drivers.Target) bool {
+	value := firstNonEmpty(
+		target.Connection["include_globals"],
+		target.Connection["includeGlobals"],
+		target.Options["include_globals"],
+		target.Options["includeGlobals"],
+		target.Options["globals"],
+	)
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func splitAddress(address string) (string, string) {

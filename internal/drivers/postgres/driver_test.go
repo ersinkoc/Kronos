@@ -75,6 +75,41 @@ func TestDriverBackupFullUsesPgDumpPlainSQL(t *testing.T) {
 	}
 }
 
+func TestDriverBackupFullCanIncludeGlobals(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{outputs: [][]byte{
+		[]byte("create role kronos_restore;\n"),
+		[]byte("create table public.users(id int);\n"),
+	}}
+	driver := &Driver{runner: runner}
+	target := drivers.Target{
+		Connection: map[string]string{"dsn": "postgres://backup:secret@db.example/app"},
+		Options:    map[string]string{"include_globals": "true"},
+	}
+	var stream drivers.MemoryRecordStream
+	rp, err := driver.BackupFull(context.Background(), target, &stream)
+	if err != nil {
+		t.Fatalf("BackupFull() error = %v", err)
+	}
+	if rp.Position != "pg_dumpall:globals+pg_dump:plain" {
+		t.Fatalf("ResumePoint.Position = %q", rp.Position)
+	}
+	if len(runner.calls) != 2 || runner.calls[0].name != "pg_dumpall" || runner.calls[1].name != "pg_dump" {
+		t.Fatalf("calls = %#v", runner.calls)
+	}
+	globalArgs := strings.Join(runner.calls[0].args, " ")
+	for _, want := range []string{"--globals-only", "--no-role-passwords", "--dbname", "postgres://backup:secret@db.example/app"} {
+		if !strings.Contains(globalArgs, want) {
+			t.Fatalf("pg_dumpall args = %q, missing %q", globalArgs, want)
+		}
+	}
+	records := stream.Records()
+	if len(records) != 4 || records[0].Object.Kind != globalsObjectKind || records[0].Object.Name != "globals" || string(records[0].Payload) != "create role kronos_restore;\n" || !records[1].Done || records[2].Object.Kind != databaseObjectKind || !records[3].Done {
+		t.Fatalf("records = %#v", records)
+	}
+}
+
 func TestDriverBackupFullRequiresWriter(t *testing.T) {
 	t.Parallel()
 
@@ -101,6 +136,23 @@ func TestDriverRestoreUsesPsql(t *testing.T) {
 	args := strings.Join(runner.calls[0].args, " ")
 	if !strings.Contains(args, "--single-transaction") || !strings.Contains(args, "--set ON_ERROR_STOP=1") || !strings.Contains(args, "postgres://127.0.0.1:5432/app?sslmode=disable") {
 		t.Fatalf("psql args = %q", args)
+	}
+}
+
+func TestDriverRestoreAppliesGlobals(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{outputs: [][]byte{[]byte("globals ok")}}
+	driver := &Driver{runner: runner}
+	var stream drivers.MemoryRecordStream
+	if err := stream.WriteRecord(drivers.ObjectRef{Name: "globals", Kind: globalsObjectKind}, []byte("create role kronos_restore;\n")); err != nil {
+		t.Fatalf("WriteRecord() error = %v", err)
+	}
+	if err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"dsn": "postgres://db"}}, &stream, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if len(runner.calls) != 1 || runner.calls[0].name != "psql" || string(runner.calls[0].stdin) != "create role kronos_restore;\n" {
+		t.Fatalf("calls = %#v", runner.calls)
 	}
 }
 
@@ -157,6 +209,17 @@ func TestPostgresDSN(t *testing.T) {
 	target = drivers.Target{Connection: map[string]string{"addr": "db.internal", "database": "app"}}
 	if got := postgresDSN(target); got != "postgres://db.internal:5432/app?sslmode=disable" {
 		t.Fatalf("postgresDSN(default port) = %q", got)
+	}
+}
+
+func TestIncludeGlobals(t *testing.T) {
+	t.Parallel()
+
+	if !includeGlobals(drivers.Target{Options: map[string]string{"include_globals": "yes"}}) {
+		t.Fatal("includeGlobals(include_globals=yes) = false, want true")
+	}
+	if includeGlobals(drivers.Target{Options: map[string]string{"include_globals": "false"}}) {
+		t.Fatal("includeGlobals(include_globals=false) = true, want false")
 	}
 }
 
