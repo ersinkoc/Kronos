@@ -133,10 +133,10 @@ Kronos is usable for its implemented Redis/local/S3-oriented paths, and now has
 a PostgreSQL logical driver MVP. It is not yet a broad multi-database
 production suite. The largest remaining areas are:
 
-- PostgreSQL real-service conformance in CI. Current PostgreSQL driver coverage
-  includes command-runner unit coverage over `pg_dump` and `psql`, tagged
-  worker pipeline smoke E2E coverage with fake client tools, and an opt-in
-  real-service conformance test gated by `KRONOS_POSTGRES_TEST_DSN`.
+- PostgreSQL operational hardening. Current PostgreSQL driver coverage includes
+  command-runner unit coverage over `pg_dump` and `psql`, tagged worker
+  pipeline smoke E2E coverage with fake client tools, and CI real-service
+  conformance with restore data verification.
 - Additional database drivers such as MySQL and MongoDB. Current executable
   driver coverage is Redis/Valkey plus the PostgreSQL logical MVP.
 - Additional storage backends such as SFTP, Azure Blob, and Google Cloud
@@ -151,8 +151,7 @@ production suite. The largest remaining areas are:
 
 ## Next Best Work
 
-1. Wire PostgreSQL real-service conformance into CI with a service container
-   and verify restore data on every protected branch run.
+1. Harden PostgreSQL restore safety and expand real-service conformance cases.
 2. Wire the WebUI to live API endpoints for dashboard state, jobs, backups, and
    agents.
 3. Add additional notification channels and hook execution surfaces.
