@@ -123,6 +123,28 @@ type BackupListResponse = {
   backups?: Backup[];
 };
 
+type Target = {
+  id: string;
+  name: string;
+  driver: string;
+  endpoint: string;
+};
+
+type Storage = {
+  id: string;
+  name: string;
+  kind: string;
+  uri: string;
+};
+
+type TargetListResponse = {
+  targets?: Target[];
+};
+
+type StorageListResponse = {
+  storages?: Storage[];
+};
+
 function AppLogo() {
   return (
     <div className="flex h-12 items-center gap-3 px-4">
@@ -145,6 +167,8 @@ export function App() {
   const [draftToken, setDraftToken] = useState(apiToken);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [backups, setBackups] = useState<Backup[]>([]);
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [storages, setStorages] = useState<Storage[]>([]);
 
   async function loadOverview({ refresh = false }: { refresh?: boolean } = {}) {
     if (refresh) {
@@ -157,9 +181,11 @@ export function App() {
     try {
       const nextOverview = await requestJSON<Overview>("/api/v1/overview", apiToken);
       setOverview(nextOverview);
-      const [jobResult, backupResult] = await Promise.allSettled([
+      const [jobResult, backupResult, targetResult, storageResult] = await Promise.allSettled([
         requestJSON<JobListResponse>("/api/v1/jobs", apiToken),
         requestJSON<BackupListResponse>("/api/v1/backups", apiToken),
+        requestJSON<TargetListResponse>("/api/v1/targets", apiToken),
+        requestJSON<StorageListResponse>("/api/v1/storages", apiToken),
       ]);
       if (jobResult.status === "fulfilled") {
         setJobs(sortJobs(jobResult.value.jobs ?? []).slice(0, 8));
@@ -171,7 +197,17 @@ export function App() {
       } else {
         setBackups(nextOverview.latest_backups ?? []);
       }
-      const failedDetails = [jobResult, backupResult].filter((result) => result.status === "rejected").length;
+      if (targetResult.status === "fulfilled") {
+        setTargets((targetResult.value.targets ?? []).slice(0, 8));
+      } else {
+        setTargets([]);
+      }
+      if (storageResult.status === "fulfilled") {
+        setStorages((storageResult.value.storages ?? []).slice(0, 8));
+      } else {
+        setStorages([]);
+      }
+      const failedDetails = [jobResult, backupResult, targetResult, storageResult].filter((result) => result.status === "rejected").length;
       if (failedDetails > 0) {
         setDetailError("Some detail endpoints require additional read scopes");
       }
@@ -347,6 +383,28 @@ export function App() {
               </section>
 
               <section className="rounded-md border border-line bg-panel p-4">
+                <h2 className="text-base font-semibold">Inventory</h2>
+                <div className="mt-4 grid gap-3">
+                  <InventoryGroup
+                    empty={loading ? "Loading targets" : "No targets"}
+                    items={targets.map((target) => ({
+                      key: target.id,
+                      label: target.name || target.id,
+                      value: target.driver || "target",
+                    }))}
+                  />
+                  <InventoryGroup
+                    empty={loading ? "Loading storage" : "No storage"}
+                    items={storages.map((storage) => ({
+                      key: storage.id,
+                      label: storage.name || storage.id,
+                      value: storage.kind || "storage",
+                    }))}
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-md border border-line bg-panel p-4">
                 <h2 className="text-base font-semibold">Latest backups</h2>
                 <div className="mt-4 grid gap-3">
                   {latestBackups.length > 0 ? (
@@ -397,6 +455,22 @@ function HealthRow({ label, value, tone }: { label: string; value: string; tone:
     <div className="flex h-10 items-center justify-between gap-4 rounded-md bg-surface px-3 text-sm">
       <span className="text-muted">{label}</span>
       <span className={`font-semibold ${healthTone[tone]}`}>{value}</span>
+    </div>
+  );
+}
+
+function InventoryGroup({ empty, items }: { empty: string; items: Array<{ key: string; label: string; value: string }> }) {
+  if (items.length === 0) {
+    return <div className="rounded-md bg-surface px-3 py-2 text-sm text-muted">{empty}</div>;
+  }
+  return (
+    <div className="grid gap-2">
+      {items.map((item) => (
+        <div key={item.key} className="flex h-10 items-center justify-between gap-3 rounded-md bg-surface px-3 text-sm">
+          <span className="min-w-0 truncate">{item.label}</span>
+          <span className="shrink-0 font-mono text-xs text-muted">{item.value}</span>
+        </div>
+      ))}
     </div>
   );
 }
