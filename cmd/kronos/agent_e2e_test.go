@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -91,6 +92,38 @@ func TestE2EWorkerRestoresRedisThroughControlPlane(t *testing.T) {
 	}
 	if !ok || finished.Operation != core.JobOperationRestore || finished.Status != core.JobStatusSucceeded {
 		t.Fatalf("finished restore ok=%v job=%#v", ok, finished)
+	}
+}
+
+func TestE2EWorkerBacksUpAndRestoresPostgresThroughControlPlane(t *testing.T) {
+	restoreLog := installE2EPostgresTools(t)
+	repoDir := t.TempDir()
+	stores := newE2EPostgresControlPlaneStores(t, repoDir)
+	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, stores))
+	defer server.Close()
+
+	_, privateKey := newE2EKeys(t)
+	backupJob := enqueueE2EBackup(t, server, "target-postgres", "storage-local")
+	done, cancel := startE2EWorker(t, server, privateKey, "agent-e2e-pg")
+	backup := waitForE2EBackup(t, stores.backups, stores.jobs, done, backupJob.ID)
+	cancel()
+	expectE2EWorkerCanceled(t, done)
+	if backup.TargetID != "target-postgres" || backup.StorageID != "storage-local" || backup.ManifestID.IsZero() || backup.ChunkCount == 0 {
+		t.Fatalf("postgres backup = %#v", backup)
+	}
+
+	restoreJob := enqueueE2ERestore(t, server, backup.ID, "target-postgres")
+	done, cancel = startE2EWorker(t, server, privateKey, "agent-e2e-pg")
+	waitForE2EJobStatus(t, stores.jobs, done, restoreJob.ID, core.JobStatusSucceeded)
+	cancel()
+	expectE2EWorkerCanceled(t, done)
+
+	restored, err := os.ReadFile(restoreLog)
+	if err != nil {
+		t.Fatalf("ReadFile(restore log) error = %v", err)
+	}
+	if !strings.Contains(string(restored), "create table public.users") || !strings.Contains(string(restored), "insert into public.users") {
+		t.Fatalf("restored SQL = %q", string(restored))
 	}
 }
 
@@ -537,6 +570,35 @@ func newE2EControlPlaneStores(t *testing.T, redisEndpoint string, repoDir string
 	return stores
 }
 
+func newE2EPostgresControlPlaneStores(t *testing.T, repoDir string) apiStores {
+	t.Helper()
+
+	stores := newE2EAPIStores(t)
+	if err := stores.targets.Save(core.Target{
+		ID:        "target-postgres",
+		Name:      "postgres-e2e",
+		Driver:    core.TargetDriverPostgres,
+		Endpoint:  "127.0.0.1:5432",
+		Database:  "app",
+		Options:   map[string]any{"username": "backup", "password": "secret", "tls": "disable"},
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("Save(postgres target) error = %v", err)
+	}
+	if err := stores.storages.Save(core.Storage{
+		ID:        "storage-local",
+		Name:      "local-e2e",
+		Kind:      core.StorageKindLocal,
+		URI:       "file://" + repoDir,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("Save(storage) error = %v", err)
+	}
+	return stores
+}
+
 func newE2EAPIStores(t *testing.T) apiStores {
 	t.Helper()
 
@@ -560,6 +622,35 @@ func newE2EKeys(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 		t.Fatalf("GenerateKey() error = %v", err)
 	}
 	return publicKey, privateKey
+}
+
+func installE2EPostgresTools(t *testing.T) string {
+	t.Helper()
+
+	binDir := t.TempDir()
+	restoreLog := filepath.Join(t.TempDir(), "psql.sql")
+	pgDump := `#!/usr/bin/env sh
+set -eu
+case " $* " in
+  *" --version "*) printf '%s\n' 'pg_dump (PostgreSQL) 16.2'; exit 0 ;;
+esac
+cat <<'SQL'
+create table public.users(id integer primary key, name text);
+insert into public.users(id, name) values (1, 'Ada');
+SQL
+`
+	psql := fmt.Sprintf(`#!/usr/bin/env sh
+set -eu
+cat >%q
+`, restoreLog)
+	for name, content := range map[string]string{"pg_dump": pgDump, "psql": psql} {
+		path := filepath.Join(binDir, name)
+		if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+			t.Fatalf("WriteFile(%s) error = %v", name, err)
+		}
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return restoreLog
 }
 
 func startE2EWorker(t *testing.T, server *httptest.Server, privateKey ed25519.PrivateKey, agentID string) (<-chan error, context.CancelFunc) {
