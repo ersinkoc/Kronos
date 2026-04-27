@@ -127,6 +127,7 @@ create index bulk_items_label_idx on %s.bulk_items(label);
 		if fullRestoreIndexPresent != "t" {
 			t.Fatalf("full restore bulk index presence = %q, want t", fullRestoreIndexPresent)
 		}
+		runPSQL(t, ctx, restoreDSN, fmt.Sprintf("select lo_unlink(payload_oid) from %s.documents; drop schema %s cascade;", sourceSchema, sourceSchema))
 	}
 	var globalRestore drivers.MemoryRecordStream
 	globalRestoreSQL := fmt.Sprintf("create role %s; comment on role %s is 'kronos global restore drill';", globalRestoreRoleName, globalRestoreRoleName)
