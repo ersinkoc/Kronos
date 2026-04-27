@@ -59,7 +59,7 @@ insert into %s.users(id, name) values (1, 'Ada'), (2, 'Grace');
 	if err := restore.WriteRecord(drivers.ObjectRef{Name: restoreSchema, Kind: databaseObjectKind}, []byte(rewrite)); err != nil {
 		t.Fatalf("WriteRecord(restore) error = %v", err)
 	}
-	if err := driver.Restore(ctx, drivers.Target{Connection: map[string]string{"dsn": restoreDSN}}, &restore, drivers.RestoreOptions{}); err != nil {
+	if err := driver.Restore(ctx, drivers.Target{Connection: map[string]string{"dsn": restoreDSN}}, &restore, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
 		t.Fatalf("Restore() error = %v", err)
 	}
 

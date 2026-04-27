@@ -92,15 +92,33 @@ func TestDriverRestoreUsesPsql(t *testing.T) {
 	if err := stream.WriteRecord(drivers.ObjectRef{Name: "app", Kind: databaseObjectKind}, []byte("create table public.users(id int);\n")); err != nil {
 		t.Fatalf("WriteRecord() error = %v", err)
 	}
-	if err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}}, &stream, drivers.RestoreOptions{}); err != nil {
+	if err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}}, &stream, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
 		t.Fatalf("Restore() error = %v", err)
 	}
 	if len(runner.calls) != 1 || runner.calls[0].name != "psql" || string(runner.calls[0].stdin) != "create table public.users(id int);\n" {
 		t.Fatalf("calls = %#v", runner.calls)
 	}
 	args := strings.Join(runner.calls[0].args, " ")
-	if !strings.Contains(args, "--set ON_ERROR_STOP=1") || !strings.Contains(args, "postgres://127.0.0.1:5432/app?sslmode=disable") {
+	if !strings.Contains(args, "--single-transaction") || !strings.Contains(args, "--set ON_ERROR_STOP=1") || !strings.Contains(args, "postgres://127.0.0.1:5432/app?sslmode=disable") {
 		t.Fatalf("psql args = %q", args)
+	}
+}
+
+func TestDriverRestoreRequiresReplaceExisting(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{}
+	driver := &Driver{runner: runner}
+	var stream drivers.MemoryRecordStream
+	if err := stream.WriteRecord(drivers.ObjectRef{Name: "app", Kind: databaseObjectKind}, []byte("create table public.users(id int);\n")); err != nil {
+		t.Fatalf("WriteRecord() error = %v", err)
+	}
+	err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}}, &stream, drivers.RestoreOptions{})
+	if err == nil || !strings.Contains(err.Error(), "replace_existing=true") {
+		t.Fatalf("Restore() error = %v, want replace_existing guard", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("guarded restore calls = %#v", runner.calls)
 	}
 }
 

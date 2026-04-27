@@ -106,7 +106,10 @@ func (d *Driver) Restore(ctx context.Context, target drivers.Target, r drivers.R
 		if opts.DryRun {
 			continue
 		}
-		args := []string{"--set", "ON_ERROR_STOP=1", "--dbname", postgresDSN(target)}
+		if !opts.ReplaceExisting {
+			return fmt.Errorf("postgres restore requires replace_existing=true because plain SQL restore can overwrite existing objects")
+		}
+		args := []string{"--single-transaction", "--set", "ON_ERROR_STOP=1", "--dbname", postgresDSN(target)}
 		if _, err := d.run(ctx, "psql", args, record.Payload); err != nil {
 			return err
 		}
