@@ -8,8 +8,11 @@ import {
   Database,
   HardDrive,
   KeyRound,
+  Pencil,
+  Plus,
   Play,
   RotateCcw,
+  Save,
   Search,
   ShieldCheck,
   TriangleAlert,
@@ -223,6 +226,32 @@ type RestoreStartResponse = {
   plan: RestorePlan;
 };
 
+type TargetForm = {
+  id: string;
+  name: string;
+  driver: string;
+  endpoint: string;
+  database: string;
+  username: string;
+  password: string;
+  tls: string;
+  agent: string;
+  tier: string;
+};
+
+const emptyTargetForm: TargetForm = {
+  id: "",
+  name: "",
+  driver: "redis",
+  endpoint: "",
+  database: "",
+  username: "",
+  password: "",
+  tls: "",
+  agent: "",
+  tier: "",
+};
+
 function AppLogo() {
   return (
     <div className="flex h-12 items-center gap-3 px-4">
@@ -257,6 +286,9 @@ export function App() {
   const [selectedStorage, setSelectedStorage] = useState<Storage | null>(null);
   const [loadingInventoryID, setLoadingInventoryID] = useState<string | null>(null);
   const [deletingInventoryID, setDeletingInventoryID] = useState<string | null>(null);
+  const [savingTarget, setSavingTarget] = useState(false);
+  const [editingTargetID, setEditingTargetID] = useState<string | null>(null);
+  const [targetForm, setTargetForm] = useState<TargetForm>(emptyTargetForm);
   const [targetDeleteConfirmation, setTargetDeleteConfirmation] = useState("");
   const [storageDeleteConfirmation, setStorageDeleteConfirmation] = useState("");
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -303,7 +335,7 @@ export function App() {
         setBackups(nextOverview.latest_backups ?? []);
       }
       if (targetResult.status === "fulfilled") {
-        setTargets((targetResult.value.targets ?? []).slice(0, 8));
+        setTargets(sortTargets(targetResult.value.targets ?? []).slice(0, 8));
       } else {
         setTargets([]);
       }
@@ -440,6 +472,73 @@ export function App() {
       setDetailError(err instanceof Error ? err.message : "storage detail request failed");
     } finally {
       setLoadingInventoryID(null);
+    }
+  }
+
+  async function editTarget(target: Target) {
+    setLoadingInventoryID(target.id);
+    setDetailError(null);
+    try {
+      const detail = await requestJSON<Target>(`/api/v1/targets/${encodeURIComponent(target.id)}?include_secrets=true`, apiToken);
+      setEditingTargetID(detail.id);
+      setTargetForm(targetFormFromTarget(detail));
+      setTargetDeleteConfirmation("");
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "target edit request failed");
+    } finally {
+      setLoadingInventoryID(null);
+    }
+  }
+
+  function resetTargetForm() {
+    setEditingTargetID(null);
+    setTargetForm(emptyTargetForm);
+    setTargetDeleteConfirmation("");
+  }
+
+  async function saveTarget() {
+    if (!targetForm.name.trim() || !targetForm.driver.trim() || !targetForm.endpoint.trim()) {
+      setDetailError("target name, driver, and endpoint are required");
+      return;
+    }
+    setSavingTarget(true);
+    setDetailError(null);
+    try {
+      const payload = targetPayload(targetForm, editingTargetID);
+      const saved = editingTargetID
+        ? await requestJSON<Target>(`/api/v1/targets/${encodeURIComponent(editingTargetID)}`, apiToken, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        : await requestJSON<Target>("/api/v1/targets", apiToken, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+      setTargets((current) => sortTargets([saved, ...current.filter((item) => item.id !== saved.id)]).slice(0, 8));
+      setSelectedTarget(saved);
+      setSelectedStorage(null);
+      setEditingTargetID(null);
+      setTargetForm(emptyTargetForm);
+      setTargetDeleteConfirmation("");
+      if (!editingTargetID) {
+        setOverview((current) =>
+          current
+            ? {
+                ...current,
+                inventory: {
+                  ...current.inventory,
+                  targets: current.inventory.targets + 1,
+                },
+              }
+            : current,
+        );
+      }
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "target save failed");
+    } finally {
+      setSavingTarget(false);
     }
   }
 
@@ -828,6 +927,15 @@ export function App() {
                 </div>
               </section>
 
+              <TargetEditor
+                editing={editingTargetID !== null}
+                form={targetForm}
+                saving={savingTarget}
+                onChange={(patch) => setTargetForm((current) => ({ ...current, ...patch }))}
+                onReset={resetTargetForm}
+                onSave={saveTarget}
+              />
+
               <section className="rounded-md border border-line bg-panel p-4">
                 <h2 className="text-base font-semibold">Automation</h2>
                 <div className="mt-4 grid gap-3">
@@ -899,6 +1007,7 @@ export function App() {
                 target={selectedTarget}
                 onConfirmationChange={setTargetDeleteConfirmation}
                 onDelete={deleteTarget}
+                onEdit={editTarget}
               />
               <StorageDetail
                 confirmation={storageDeleteConfirmation}
@@ -1014,25 +1123,176 @@ function JobActionButton({ job, updating, onAction }: { job: Job; updating: bool
   return <span className="text-xs text-muted">-</span>;
 }
 
+function TargetEditor({
+  editing,
+  form,
+  saving,
+  onChange,
+  onReset,
+  onSave,
+}: {
+  editing: boolean;
+  form: TargetForm;
+  saving: boolean;
+  onChange: (patch: Partial<TargetForm>) => void;
+  onReset: () => void;
+  onSave: () => Promise<void>;
+}) {
+  const disabled = saving || !form.name.trim() || !form.driver.trim() || !form.endpoint.trim();
+  return (
+    <section className="rounded-md border border-line bg-panel p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">Target editor</h2>
+        <Button className="h-7 px-2 text-xs" icon={<Plus className="h-3.5 w-3.5" />} onClick={onReset} type="button" variant="ghost">
+          New
+        </Button>
+      </div>
+      <div className="mt-4 grid gap-3">
+        <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="target-id">
+          ID
+          <input
+            id="target-id"
+            className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition placeholder:text-muted focus:border-bronze disabled:opacity-70"
+            disabled={editing}
+            placeholder="optional"
+            value={form.id}
+            onChange={(event) => onChange({ id: event.target.value })}
+          />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="target-name">
+            Name
+            <input
+              id="target-name"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition placeholder:text-muted focus:border-bronze"
+              value={form.name}
+              onChange={(event) => onChange({ name: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="target-driver">
+            Driver
+            <select
+              id="target-driver"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition focus:border-bronze"
+              value={form.driver}
+              onChange={(event) => onChange({ driver: event.target.value })}
+            >
+              <option value="redis">redis</option>
+              <option value="postgres">postgres</option>
+              <option value="mysql">mysql</option>
+              <option value="mariadb">mariadb</option>
+              <option value="mongodb">mongodb</option>
+            </select>
+          </label>
+        </div>
+        <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="target-endpoint">
+          Endpoint
+          <input
+            id="target-endpoint"
+            className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition placeholder:text-muted focus:border-bronze"
+            placeholder="host:port"
+            value={form.endpoint}
+            onChange={(event) => onChange({ endpoint: event.target.value })}
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="target-database">
+          Database
+          <input
+            id="target-database"
+            className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition placeholder:text-muted focus:border-bronze"
+            placeholder="optional"
+            value={form.database}
+            onChange={(event) => onChange({ database: event.target.value })}
+          />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="target-user">
+            User
+            <input
+              id="target-user"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition placeholder:text-muted focus:border-bronze"
+              value={form.username}
+              onChange={(event) => onChange({ username: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="target-password">
+            Password
+            <input
+              id="target-password"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition placeholder:text-muted focus:border-bronze"
+              type="password"
+              value={form.password}
+              onChange={(event) => onChange({ password: event.target.value })}
+            />
+          </label>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="target-tls">
+            TLS
+            <select
+              id="target-tls"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition focus:border-bronze"
+              value={form.tls}
+              onChange={(event) => onChange({ tls: event.target.value })}
+            >
+              <option value="">auto</option>
+              <option value="disable">disable</option>
+              <option value="require">require</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="target-agent">
+            Agent
+            <input
+              id="target-agent"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition placeholder:text-muted focus:border-bronze"
+              value={form.agent}
+              onChange={(event) => onChange({ agent: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="target-tier">
+            Tier
+            <input
+              id="target-tier"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition placeholder:text-muted focus:border-bronze"
+              value={form.tier}
+              onChange={(event) => onChange({ tier: event.target.value })}
+            />
+          </label>
+        </div>
+        <Button className="h-8 text-xs" disabled={disabled} icon={<Save className="h-4 w-4" />} onClick={() => void onSave()} type="button" variant="primary">
+          {saving ? "Saving" : editing ? "Update target" : "Create target"}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 function TargetDetail({
   confirmation,
   deleting,
   target,
   onConfirmationChange,
   onDelete,
+  onEdit,
 }: {
   confirmation: string;
   deleting: boolean;
   target: Target | null;
   onConfirmationChange: (value: string) => void;
   onDelete: (target: Target) => Promise<void>;
+  onEdit: (target: Target) => Promise<void>;
 }) {
   if (!target) {
     return null;
   }
   return (
     <section className="rounded-md border border-line bg-panel p-4">
-      <h2 className="text-base font-semibold">Target detail</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">Target detail</h2>
+        <Button className="h-7 px-2 text-xs" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => void onEdit(target)} type="button" variant="ghost">
+          Edit
+        </Button>
+      </div>
       <div className="mt-4 grid gap-3">
         <HealthRow label="ID" value={target.id} tone="bronze" />
         <HealthRow label="Name" value={target.name || "-"} tone="indigo" />
@@ -1390,6 +1650,74 @@ function sortJobs(values: Job[]) {
 
 function sortBackups(values: Backup[]) {
   return [...values].sort((a, b) => Date.parse(b.ended_at) - Date.parse(a.ended_at));
+}
+
+function sortTargets(values: Target[]) {
+  return [...values].sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+}
+
+function targetFormFromTarget(target: Target): TargetForm {
+  return {
+    id: target.id,
+    name: target.name || "",
+    driver: target.driver || "redis",
+    endpoint: target.endpoint || "",
+    database: target.database || "",
+    username: stringOption(target.options, "username"),
+    password: secretOption(target.options, "password"),
+    tls: stringOption(target.options, "tls"),
+    agent: target.labels?.agent || "",
+    tier: target.labels?.tier || "",
+  };
+}
+
+function targetPayload(form: TargetForm, editingID: string | null) {
+  const payload: Record<string, unknown> = {
+    name: form.name.trim(),
+    driver: form.driver.trim(),
+    endpoint: form.endpoint.trim(),
+  };
+  const id = editingID || form.id.trim();
+  if (id) {
+    payload.id = id;
+  }
+  if (form.database.trim()) {
+    payload.database = form.database.trim();
+  }
+  const options: Record<string, string> = {};
+  if (form.username.trim()) {
+    options.username = form.username.trim();
+  }
+  if (form.password.trim()) {
+    options.password = form.password.trim();
+  }
+  if (form.tls.trim()) {
+    options.tls = form.tls.trim();
+  }
+  if (Object.keys(options).length > 0) {
+    payload.options = options;
+  }
+  const labels: Record<string, string> = {};
+  if (form.agent.trim()) {
+    labels.agent = form.agent.trim();
+  }
+  if (form.tier.trim()) {
+    labels.tier = form.tier.trim();
+  }
+  if (Object.keys(labels).length > 0) {
+    payload.labels = labels;
+  }
+  return payload;
+}
+
+function stringOption(values: Record<string, unknown> | undefined, key: string) {
+  const value = values?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function secretOption(values: Record<string, unknown> | undefined, key: string) {
+  const value = stringOption(values, key);
+  return value === "***REDACTED***" ? "" : value;
 }
 
 function restorePayload(backupID: string, targetID: string, at: string, dryRun: boolean, replaceExisting: boolean) {
