@@ -101,6 +101,9 @@ executes `kronos version`.
 - Local and S3-compatible storage backends.
 - Persistent control plane state, scheduler state, jobs, backups, retention,
   notifications, users, tokens, and audit log.
+- Restore evidence artifacts are hash-addressed and stored independently from
+  job records, so `/api/v1/jobs/{id}/evidence` remains available after job
+  metadata pruning.
 - Scoped bearer tokens, role-capped token creation, token lifecycle operations,
   request IDs, security headers, and mutation audit events.
 - Health, readiness, metrics, OpenAPI, operations docs, deployment topology

@@ -240,6 +240,7 @@ func newServerHandlerWithRegistry(cfg *config.Config, registry *control.AgentReg
 
 type apiStores struct {
 	jobs           *control.JobStore
+	evidence       *control.EvidenceStore
 	audit          *kaudit.Log
 	tokens         *control.TokenStore
 	users          *control.UserStore
@@ -400,6 +401,10 @@ func newAPIStores(db *kvstore.DB) (apiStores, error) {
 	if err != nil {
 		return apiStores{}, err
 	}
+	evidence, err := control.NewEvidenceStore(db)
+	if err != nil {
+		return apiStores{}, err
+	}
 	auditLog, err := kaudit.New(db, core.RealClock{})
 	if err != nil {
 		return apiStores{}, err
@@ -440,7 +445,7 @@ func newAPIStores(db *kvstore.DB) (apiStores, error) {
 	if err != nil {
 		return apiStores{}, err
 	}
-	return apiStores{jobs: jobs, audit: auditLog, tokens: tokens, users: users, targets: targets, storages: storages, schedules: schedules, scheduleStates: scheduleStates, backups: backups, policies: policies, notifications: notifications}, nil
+	return apiStores{jobs: jobs, evidence: evidence, audit: auditLog, tokens: tokens, users: users, targets: targets, storages: storages, schedules: schedules, scheduleStates: scheduleStates, backups: backups, policies: policies, notifications: notifications}, nil
 }
 
 func seedAPIStoresFromConfig(stores apiStores, cfg *config.Config, now time.Time) error {
@@ -898,7 +903,7 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 			if !requireScope(w, r, stores.tokens, "job:read") {
 				return
 			}
-			handleGetJobEvidence(w, stores.jobs, core.ID(id))
+			handleGetJobEvidence(w, stores.evidence, stores.jobs, core.ID(id))
 		case r.Method == http.MethodPost && action == "cancel":
 			if !requireScope(w, r, stores.tokens, "job:write") {
 				return
@@ -913,7 +918,7 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 			if !requireScope(w, r, stores.tokens, "job:write") {
 				return
 			}
-			handleFinishJob(w, r, stores.jobs, stores.backups, stores.audit, stores.notifications, core.ID(id))
+			handleFinishJob(w, r, stores.jobs, stores.evidence, stores.backups, stores.audit, stores.notifications, core.ID(id))
 		default:
 			methodNotAllowed(w, http.MethodGet, http.MethodPost)
 		}
@@ -2702,12 +2707,27 @@ func handleGetJob(w http.ResponseWriter, store *control.JobStore, id core.ID) {
 	writeJSON(w, job)
 }
 
-func handleGetJobEvidence(w http.ResponseWriter, store *control.JobStore, id core.ID) {
-	if store == nil {
-		http.Error(w, "job store is not configured", http.StatusServiceUnavailable)
+func handleGetJobEvidence(w http.ResponseWriter, evidence *control.EvidenceStore, jobs *control.JobStore, id core.ID) {
+	if evidence != nil {
+		artifact, ok, err := evidence.GetByJobID(id)
+		if err != nil {
+			http.Error(w, "get evidence artifact", http.StatusInternalServerError)
+			return
+		}
+		if ok {
+			writeJSON(w, artifact)
+			return
+		}
+	}
+	if jobs == nil {
+		if evidence == nil {
+			http.Error(w, "evidence store is not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.NotFound(w, nil)
 		return
 	}
-	job, ok, err := store.Get(id)
+	job, ok, err := jobs.Get(id)
 	if err != nil {
 		http.Error(w, "get job", http.StatusInternalServerError)
 		return
@@ -2719,7 +2739,7 @@ func handleGetJobEvidence(w http.ResponseWriter, store *control.JobStore, id cor
 	writeJSON(w, job.EvidenceArtifact)
 }
 
-func handleFinishJob(w http.ResponseWriter, r *http.Request, jobs *control.JobStore, backups *control.BackupStore, auditLog *kaudit.Log, notifications *control.NotificationRuleStore, id core.ID) {
+func handleFinishJob(w http.ResponseWriter, r *http.Request, jobs *control.JobStore, evidence *control.EvidenceStore, backups *control.BackupStore, auditLog *kaudit.Log, notifications *control.NotificationRuleStore, id core.ID) {
 	if jobs == nil {
 		http.Error(w, "job store is not configured", http.StatusServiceUnavailable)
 		return
@@ -2901,6 +2921,12 @@ func handleFinishJob(w http.ResponseWriter, r *http.Request, jobs *control.JobSt
 			return
 		}
 		job.EvidenceArtifact = artifact
+		if evidence != nil {
+			if err := evidence.Save(*artifact); err != nil {
+				http.Error(w, "save restore evidence artifact", http.StatusInternalServerError)
+				return
+			}
+		}
 		if err := jobs.Save(job); err != nil {
 			http.Error(w, "save restore evidence artifact", http.StatusInternalServerError)
 			return
@@ -2971,15 +2997,16 @@ func buildRestoreEvidenceArtifact(job core.Job) (*core.EvidenceArtifact, error) 
 		return nil, err
 	}
 	sum := sha256.Sum256(data)
+	sha := hex.EncodeToString(sum[:])
 	createdAt := job.EndedAt
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
 	return &core.EvidenceArtifact{
-		ID:        core.ID(fmt.Sprintf("%s-restore-evidence", job.ID)),
+		ID:        core.ID(fmt.Sprintf("restore-evidence-%s", sha)),
 		JobID:     job.ID,
 		Kind:      "restore",
-		SHA256:    hex.EncodeToString(sum[:]),
+		SHA256:    sha,
 		CreatedAt: createdAt,
 		Restore:   payload,
 	}, nil

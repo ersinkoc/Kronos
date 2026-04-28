@@ -87,8 +87,8 @@ This repository currently has the Phase 0 foundation in place and active Phase
   claim, finish reporting, full/incremental backup execution, and restore
   execution
 - server state: kvstore-backed job persistence, restart recovery for active
-  jobs, config-seeded resources, `/api/v1/jobs`, claim, finish, and cancel
-  endpoints
+  jobs, independent evidence artifact retention, config-seeded resources,
+  `/api/v1/jobs`, claim, finish, and cancel endpoints
 - orchestration: scheduler due jobs persist as queued jobs with
   queued/running/terminal lifecycle transitions and backup metadata capture on
   successful finish
@@ -100,8 +100,9 @@ This repository currently has the Phase 0 foundation in place and active Phase
   retention policy CRUD and plan/apply with dry-run support
 - restore API: restore preview plans that validate backup parent chains,
   enqueue restore jobs with dry-run and replace-existing restore options, and
-  persist restore outcome summaries and hash-addressed evidence artifacts with
-  backup-scoped job filtering and `/api/v1/jobs/{id}/evidence` export
+  persist restore outcome summaries and independently retained hash-addressed
+  evidence artifacts with backup-scoped job filtering and
+  `/api/v1/jobs/{id}/evidence` export
 - notification API: webhook rule CRUD for terminal job events with optional HMAC
   payload signatures and bounded delivery retries
 - token API: scoped API token create/list/verify/revoke/prune with hashed verifier

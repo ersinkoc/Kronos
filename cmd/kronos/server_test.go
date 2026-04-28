@@ -2197,6 +2197,21 @@ func TestServerFinishRestoreJobRejectsBackupMetadata(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"sha256"`) || !strings.Contains(body.String(), `"restore"`) || !strings.Contains(body.String(), `"restored_bytes":256`) {
 		t.Fatalf("restore evidence status=%d body=%q", resp.StatusCode, body.String())
 	}
+	if err := stores.jobs.Delete("restore-job"); err != nil {
+		t.Fatalf("Delete(restore-job) error = %v", err)
+	}
+	resp, err = server.Client().Get(server.URL + "/api/v1/jobs/restore-job/evidence")
+	if err != nil {
+		t.Fatalf("GET retained restore evidence error = %v", err)
+	}
+	body.Reset()
+	if _, err := body.ReadFrom(resp.Body); err != nil {
+		t.Fatalf("ReadFrom(retained restore evidence) error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body.String(), `"sha256"`) || !strings.Contains(body.String(), `"restored_bytes":256`) {
+		t.Fatalf("retained restore evidence status=%d body=%q", resp.StatusCode, body.String())
+	}
 }
 
 func TestServerFinishRestoreJobPersistsFailureEvidence(t *testing.T) {

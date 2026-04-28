@@ -59,6 +59,76 @@ func TestJobStoreSaveGetListReopen(t *testing.T) {
 	}
 }
 
+func TestJobStoreDelete(t *testing.T) {
+	t.Parallel()
+
+	db, err := kvstore.Open(t.TempDir() + "/state.db")
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+	store, err := NewJobStore(db)
+	if err != nil {
+		t.Fatalf("NewJobStore() error = %v", err)
+	}
+	if err := store.Save(core.Job{ID: "job-1", Status: core.JobStatusQueued}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	if err := store.Delete("job-1"); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, ok, err := store.Get("job-1"); err != nil || ok {
+		t.Fatalf("Get(deleted) ok=%v err=%v, want false nil", ok, err)
+	}
+}
+
+func TestEvidenceStoreSaveGetByJobIDReopen(t *testing.T) {
+	t.Parallel()
+
+	path := t.TempDir() + "/state.db"
+	db, err := kvstore.Open(path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	store, err := NewEvidenceStore(db)
+	if err != nil {
+		t.Fatalf("NewEvidenceStore() error = %v", err)
+	}
+	artifact := core.EvidenceArtifact{
+		ID:        "artifact-1",
+		JobID:     "job-1",
+		Kind:      "restore",
+		SHA256:    "abc123",
+		CreatedAt: time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC),
+		Restore: &core.RestoreEvidence{
+			Status: core.JobStatusSucceeded,
+		},
+	}
+	if err := store.Save(artifact); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := kvstore.Open(path)
+	if err != nil {
+		t.Fatalf("Open(reopen) error = %v", err)
+	}
+	defer reopened.Close()
+	store, err = NewEvidenceStore(reopened)
+	if err != nil {
+		t.Fatalf("NewEvidenceStore(reopen) error = %v", err)
+	}
+	got, ok, err := store.GetByJobID("job-1")
+	if err != nil {
+		t.Fatalf("GetByJobID() error = %v", err)
+	}
+	if !ok || got.ID != "artifact-1" || got.SHA256 != "abc123" || got.Restore == nil {
+		t.Fatalf("GetByJobID() = %#v, %v", got, ok)
+	}
+}
+
 func TestJobStoreFailActive(t *testing.T) {
 	t.Parallel()
 

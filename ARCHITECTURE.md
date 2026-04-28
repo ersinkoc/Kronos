@@ -215,6 +215,7 @@ classDiagram
 
     class server {
       JobStore
+      EvidenceStore
       TargetStore
       StorageStore
       ScheduleStore
@@ -322,6 +323,7 @@ flowchart LR
     Agents -->|capacity and liveness| Jobs
     Worker -->|claim| Jobs
     Worker -->|finish| Jobs
+    Worker -->|restore evidence| Evidence[(EvidenceStore)]
 ```
 
 ## Backup Data Path
@@ -477,6 +479,8 @@ Kronos separates operational state from repository objects:
 flowchart TB
     subgraph StateDB[state.db]
         KVJobs[jobs]
+        KVEvidence[evidence_artifacts]
+        KVEvidenceByJob[evidence_artifacts_by_job]
         KVTargets[targets]
         KVStorages[storages]
         KVSchedules[schedules]
@@ -492,6 +496,7 @@ flowchart TB
     end
 
     KVBackups -->|manifest_id/key| Manifests
+    KVEvidenceByJob --> KVEvidence
     Manifests -->|chunk references| Chunks
 ```
 

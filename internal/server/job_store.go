@@ -10,10 +10,19 @@ import (
 	"github.com/kronos/kronos/internal/kvstore"
 )
 
-var jobsBucket = []byte("jobs")
+var (
+	jobsBucket                 = []byte("jobs")
+	evidenceArtifactsBucket    = []byte("evidence_artifacts")
+	evidenceArtifactsJobBucket = []byte("evidence_artifacts_by_job")
+)
 
 // JobStore persists server job state in Kronos' embedded KV store.
 type JobStore struct {
+	db *kvstore.DB
+}
+
+// EvidenceStore persists exportable evidence artifacts independently from jobs.
+type EvidenceStore struct {
 	db *kvstore.DB
 }
 
@@ -23,6 +32,14 @@ func NewJobStore(db *kvstore.DB) (*JobStore, error) {
 		return nil, fmt.Errorf("kv database is required")
 	}
 	return &JobStore{db: db}, nil
+}
+
+// NewEvidenceStore returns an evidence artifact store backed by db.
+func NewEvidenceStore(db *kvstore.DB) (*EvidenceStore, error) {
+	if db == nil {
+		return nil, fmt.Errorf("kv database is required")
+	}
+	return &EvidenceStore{db: db}, nil
 }
 
 // Save inserts or replaces one job.
@@ -72,6 +89,23 @@ func (s *JobStore) Get(id core.ID) (core.Job, bool, error) {
 	return job, ok, err
 }
 
+// Delete removes one job by ID.
+func (s *JobStore) Delete(id core.ID) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("job store is closed")
+	}
+	if id.IsZero() {
+		return fmt.Errorf("job id is required")
+	}
+	return s.db.Update(func(tx *kvstore.Tx) error {
+		bucket, err := tx.Bucket(jobsBucket)
+		if err != nil {
+			return err
+		}
+		return bucket.Delete([]byte(id))
+	})
+}
+
 // List returns all jobs ordered by queued time, then ID.
 func (s *JobStore) List() ([]core.Job, error) {
 	if s == nil || s.db == nil {
@@ -104,6 +138,93 @@ func (s *JobStore) List() ([]core.Job, error) {
 		return jobs[i].QueuedAt.Before(jobs[j].QueuedAt)
 	})
 	return jobs, err
+}
+
+// Save inserts or replaces one evidence artifact and indexes it by job ID.
+func (s *EvidenceStore) Save(artifact core.EvidenceArtifact) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("evidence store is closed")
+	}
+	if artifact.ID.IsZero() {
+		return fmt.Errorf("evidence artifact id is required")
+	}
+	if artifact.JobID.IsZero() {
+		return fmt.Errorf("evidence artifact job id is required")
+	}
+	data, err := json.Marshal(artifact)
+	if err != nil {
+		return err
+	}
+	return s.db.Update(func(tx *kvstore.Tx) error {
+		artifacts, err := tx.Bucket(evidenceArtifactsBucket)
+		if err != nil {
+			return err
+		}
+		byJob, err := tx.Bucket(evidenceArtifactsJobBucket)
+		if err != nil {
+			return err
+		}
+		if err := artifacts.Put([]byte(artifact.ID), data); err != nil {
+			return err
+		}
+		return byJob.Put([]byte(artifact.JobID), []byte(artifact.ID))
+	})
+}
+
+// Get fetches one evidence artifact by artifact ID.
+func (s *EvidenceStore) Get(id core.ID) (core.EvidenceArtifact, bool, error) {
+	if s == nil || s.db == nil {
+		return core.EvidenceArtifact{}, false, fmt.Errorf("evidence store is closed")
+	}
+	if id.IsZero() {
+		return core.EvidenceArtifact{}, false, fmt.Errorf("evidence artifact id is required")
+	}
+	var artifact core.EvidenceArtifact
+	var ok bool
+	err := s.db.View(func(tx *kvstore.Tx) error {
+		bucket, err := tx.Bucket(evidenceArtifactsBucket)
+		if err != nil {
+			return err
+		}
+		data, exists, err := bucket.Get([]byte(id))
+		if err != nil || !exists {
+			ok = exists
+			return err
+		}
+		ok = true
+		return json.Unmarshal(data, &artifact)
+	})
+	return artifact, ok, err
+}
+
+// GetByJobID fetches the latest evidence artifact associated with a job ID.
+func (s *EvidenceStore) GetByJobID(jobID core.ID) (core.EvidenceArtifact, bool, error) {
+	if s == nil || s.db == nil {
+		return core.EvidenceArtifact{}, false, fmt.Errorf("evidence store is closed")
+	}
+	if jobID.IsZero() {
+		return core.EvidenceArtifact{}, false, fmt.Errorf("job id is required")
+	}
+	var artifactID core.ID
+	var ok bool
+	err := s.db.View(func(tx *kvstore.Tx) error {
+		byJob, err := tx.Bucket(evidenceArtifactsJobBucket)
+		if err != nil {
+			return err
+		}
+		data, exists, err := byJob.Get([]byte(jobID))
+		if err != nil || !exists {
+			ok = exists
+			return err
+		}
+		ok = true
+		artifactID = core.ID(data)
+		return nil
+	})
+	if err != nil || !ok {
+		return core.EvidenceArtifact{}, ok, err
+	}
+	return s.Get(artifactID)
 }
 
 // FailActive marks jobs that were active during a server loss as failed.

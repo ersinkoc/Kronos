@@ -47,6 +47,8 @@ flowchart LR
   execution, and finish reporting.
 - REST API for resources, jobs, backups, retention, restore, audit, users, and
   tokens, with checked OpenAPI coverage.
+- Restore evidence artifacts are persisted in a dedicated evidence store and
+  remain exportable by job ID even when the job record is no longer present.
 - Token-based authorization with scoped bearer tokens, role-capped token
   creation, inactive token pruning, request IDs, and audit recording for
   mutations.
@@ -181,9 +183,8 @@ broad multi-database production suite. The largest remaining areas are:
 1. Add broader MongoDB version/recovery coverage, including authenticated
    targets and larger archive restore drills.
 2. Extend PostgreSQL hardening around broader upgrade rehearsal evidence.
-3. Move restore evidence artifact retention beyond job retention.
-4. Add additional notification channels and hook execution surfaces.
-5. Run a signed-tag release rehearsal and archive checksum, signature, and
+3. Add additional notification channels and hook execution surfaces.
+4. Run a signed-tag release rehearsal and archive checksum, signature, and
    attestation verification evidence.
-6. Add cloud-specific deployment manifests for common managed Kubernetes
+5. Add cloud-specific deployment manifests for common managed Kubernetes
    environments.
