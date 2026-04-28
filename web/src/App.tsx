@@ -253,6 +253,17 @@ type StorageForm = {
   forcePathStyle: boolean;
 };
 
+type ScheduleForm = {
+  id: string;
+  name: string;
+  targetID: string;
+  storageID: string;
+  backupType: string;
+  expression: string;
+  retentionPolicyID: string;
+  paused: boolean;
+};
+
 const emptyTargetForm: TargetForm = {
   id: "",
   name: "",
@@ -278,6 +289,17 @@ const emptyStorageForm: StorageForm = {
   secretKey: "",
   sessionToken: "",
   forcePathStyle: false,
+};
+
+const emptyScheduleForm: ScheduleForm = {
+  id: "",
+  name: "",
+  targetID: "",
+  storageID: "",
+  backupType: "full",
+  expression: "",
+  retentionPolicyID: "",
+  paused: false,
 };
 
 function AppLogo() {
@@ -328,6 +350,9 @@ export function App() {
   const [selectedRetentionPolicy, setSelectedRetentionPolicy] = useState<RetentionPolicy | null>(null);
   const [loadingAutomationID, setLoadingAutomationID] = useState<string | null>(null);
   const [updatingScheduleID, setUpdatingScheduleID] = useState<string | null>(null);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [editingScheduleID, setEditingScheduleID] = useState<string | null>(null);
+  const [scheduleForm, setScheduleForm] = useState<ScheduleForm>(emptyScheduleForm);
   const [restoreTargetID, setRestoreTargetID] = useState("");
   const [restoreAt, setRestoreAt] = useState("");
   const [restoreConfirmation, setRestoreConfirmation] = useState("");
@@ -376,7 +401,7 @@ export function App() {
         setStorages([]);
       }
       if (scheduleResult.status === "fulfilled") {
-        setSchedules((scheduleResult.value.schedules ?? []).slice(0, 8));
+        setSchedules(sortSchedules(scheduleResult.value.schedules ?? []).slice(0, 8));
       } else {
         setSchedules([]);
       }
@@ -724,6 +749,50 @@ export function App() {
     }
   }
 
+  function editSchedule(schedule: Schedule) {
+    setEditingScheduleID(schedule.id);
+    setScheduleForm(scheduleFormFromSchedule(schedule));
+  }
+
+  function resetScheduleForm() {
+    setEditingScheduleID(null);
+    setScheduleForm(emptyScheduleForm);
+  }
+
+  async function saveSchedule() {
+    if (!scheduleForm.name.trim() || !scheduleForm.targetID.trim() || !scheduleForm.storageID.trim() || !scheduleForm.expression.trim()) {
+      setDetailError("schedule name, target, storage, and expression are required");
+      return;
+    }
+    setSavingSchedule(true);
+    setDetailError(null);
+    try {
+      const payload = schedulePayload(scheduleForm, editingScheduleID);
+      const saved = editingScheduleID
+        ? await requestJSON<Schedule>(`/api/v1/schedules/${encodeURIComponent(editingScheduleID)}`, apiToken, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        : await requestJSON<Schedule>("/api/v1/schedules", apiToken, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+      setSchedules((current) => sortSchedules([saved, ...current.filter((item) => item.id !== saved.id)]).slice(0, 8));
+      setSelectedSchedule(saved);
+      setSelectedRetentionPolicy(null);
+      setEditingScheduleID(null);
+      setScheduleForm(emptyScheduleForm);
+      const previousSchedule = editingScheduleID ? schedules.find((item) => item.id === editingScheduleID) ?? (selectedSchedule?.id === editingScheduleID ? selectedSchedule : null) : null;
+      setOverview((current) => updateOverviewScheduleCounts(current, previousSchedule, saved));
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "schedule save failed");
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
+
   async function toggleSchedulePause(schedule: Schedule) {
     setUpdatingScheduleID(schedule.id);
     setDetailError(null);
@@ -1041,6 +1110,17 @@ export function App() {
                 onReset={resetStorageForm}
                 onSave={saveStorage}
               />
+              <ScheduleEditor
+                editing={editingScheduleID !== null}
+                form={scheduleForm}
+                retentionPolicies={retentionPolicies}
+                saving={savingSchedule}
+                storages={storages}
+                targets={targets}
+                onChange={(patch) => setScheduleForm((current) => ({ ...current, ...patch }))}
+                onReset={resetScheduleForm}
+                onSave={saveSchedule}
+              />
 
               <section className="rounded-md border border-line bg-panel p-4">
                 <h2 className="text-base font-semibold">Automation</h2>
@@ -1123,7 +1203,7 @@ export function App() {
                 onDelete={deleteStorage}
                 onEdit={editStorage}
               />
-              <ScheduleDetail schedule={selectedSchedule} updating={updatingScheduleID === selectedSchedule?.id} onToggle={toggleSchedulePause} />
+              <ScheduleDetail schedule={selectedSchedule} updating={updatingScheduleID === selectedSchedule?.id} onEdit={editSchedule} onToggle={toggleSchedulePause} />
               <RetentionPolicyDetail policy={selectedRetentionPolicy} />
               <JobDetail job={selectedJob} />
               <BackupDetail
@@ -1523,6 +1603,149 @@ function StorageEditor({
   );
 }
 
+function ScheduleEditor({
+  editing,
+  form,
+  retentionPolicies,
+  saving,
+  storages,
+  targets,
+  onChange,
+  onReset,
+  onSave,
+}: {
+  editing: boolean;
+  form: ScheduleForm;
+  retentionPolicies: RetentionPolicy[];
+  saving: boolean;
+  storages: Storage[];
+  targets: Target[];
+  onChange: (patch: Partial<ScheduleForm>) => void;
+  onReset: () => void;
+  onSave: () => Promise<void>;
+}) {
+  const disabled = saving || !form.name.trim() || !form.targetID.trim() || !form.storageID.trim() || !form.expression.trim();
+  return (
+    <section className="rounded-md border border-line bg-panel p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">Schedule editor</h2>
+        <Button className="h-7 px-2 text-xs" icon={<Plus className="h-3.5 w-3.5" />} onClick={onReset} type="button" variant="ghost">
+          New
+        </Button>
+      </div>
+      <div className="mt-4 grid gap-3">
+        <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="schedule-id">
+          ID
+          <input
+            id="schedule-id"
+            className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition placeholder:text-muted focus:border-bronze disabled:opacity-70"
+            disabled={editing}
+            placeholder="optional"
+            value={form.id}
+            onChange={(event) => onChange({ id: event.target.value })}
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="schedule-name">
+          Name
+          <input
+            id="schedule-name"
+            className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition placeholder:text-muted focus:border-bronze"
+            value={form.name}
+            onChange={(event) => onChange({ name: event.target.value })}
+          />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="schedule-target">
+            Target
+            <select
+              id="schedule-target"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition focus:border-bronze"
+              value={form.targetID}
+              onChange={(event) => onChange({ targetID: event.target.value })}
+            >
+              <option value="">select</option>
+              {targets.map((target) => (
+                <option key={target.id} value={target.id}>
+                  {target.name || target.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="schedule-storage">
+            Storage
+            <select
+              id="schedule-storage"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition focus:border-bronze"
+              value={form.storageID}
+              onChange={(event) => onChange({ storageID: event.target.value })}
+            >
+              <option value="">select</option>
+              {storages.map((storage) => (
+                <option key={storage.id} value={storage.id}>
+                  {storage.name || storage.id}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="schedule-type">
+            Type
+            <select
+              id="schedule-type"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition focus:border-bronze"
+              value={form.backupType}
+              onChange={(event) => onChange({ backupType: event.target.value })}
+            >
+              <option value="full">full</option>
+              <option value="incremental">incremental</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="schedule-retention">
+            Retention
+            <select
+              id="schedule-retention"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition focus:border-bronze"
+              value={form.retentionPolicyID}
+              onChange={(event) => onChange({ retentionPolicyID: event.target.value })}
+            >
+              <option value="">none</option>
+              {retentionPolicies.map((policy) => (
+                <option key={policy.id} value={policy.id}>
+                  {policy.name || policy.id}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="schedule-expression">
+          Expression
+          <input
+            id="schedule-expression"
+            className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition placeholder:text-muted focus:border-bronze"
+            placeholder="0 2 * * *"
+            value={form.expression}
+            onChange={(event) => onChange({ expression: event.target.value })}
+          />
+        </label>
+        <label className="flex min-h-9 items-center gap-2 rounded-md bg-surface px-3 text-sm text-muted" htmlFor="schedule-paused">
+          <input
+            id="schedule-paused"
+            checked={form.paused}
+            className="h-4 w-4 accent-bronze"
+            type="checkbox"
+            onChange={(event) => onChange({ paused: event.target.checked })}
+          />
+          Paused
+        </label>
+        <Button className="h-8 text-xs" disabled={disabled} icon={<Save className="h-4 w-4" />} onClick={() => void onSave()} type="button" variant="primary">
+          {saving ? "Saving" : editing ? "Update schedule" : "Create schedule"}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 function TargetDetail({
   confirmation,
   deleting,
@@ -1657,10 +1880,12 @@ function DeleteResourceControl({
 function ScheduleDetail({
   schedule,
   updating,
+  onEdit,
   onToggle,
 }: {
   schedule: Schedule | null;
   updating: boolean;
+  onEdit: (schedule: Schedule) => void;
   onToggle: (schedule: Schedule) => Promise<void>;
 }) {
   if (!schedule) {
@@ -1670,9 +1895,14 @@ function ScheduleDetail({
     <section className="rounded-md border border-line bg-panel p-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold">Schedule detail</h2>
-        <Button className="h-7 px-2 text-xs" disabled={updating} onClick={() => void onToggle(schedule)} type="button" variant={schedule.paused ? "secondary" : "ghost"}>
-          {updating ? "Saving" : schedule.paused ? "Resume" : "Pause"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button className="h-7 px-2 text-xs" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => onEdit(schedule)} type="button" variant="ghost">
+            Edit
+          </Button>
+          <Button className="h-7 px-2 text-xs" disabled={updating} onClick={() => void onToggle(schedule)} type="button" variant={schedule.paused ? "secondary" : "ghost"}>
+            {updating ? "Saving" : schedule.paused ? "Resume" : "Pause"}
+          </Button>
+        </div>
       </div>
       <div className="mt-4 grid gap-3">
         <HealthRow label="ID" value={schedule.id} tone="bronze" />
@@ -1923,6 +2153,10 @@ function sortStorages(values: Storage[]) {
   return [...values].sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
 }
 
+function sortSchedules(values: Schedule[]) {
+  return [...values].sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+}
+
 function targetFormFromTarget(target: Target): TargetForm {
   return {
     id: target.id,
@@ -2031,6 +2265,38 @@ function storagePayload(form: StorageForm, editingID: string | null) {
   return payload;
 }
 
+function scheduleFormFromSchedule(schedule: Schedule): ScheduleForm {
+  return {
+    id: schedule.id,
+    name: schedule.name || "",
+    targetID: schedule.target_id || "",
+    storageID: schedule.storage_id || "",
+    backupType: schedule.backup_type || "full",
+    expression: schedule.expression || "",
+    retentionPolicyID: schedule.retention_policy_id || "",
+    paused: schedule.paused,
+  };
+}
+
+function schedulePayload(form: ScheduleForm, editingID: string | null) {
+  const payload: Record<string, unknown> = {
+    name: form.name.trim(),
+    target_id: form.targetID.trim(),
+    storage_id: form.storageID.trim(),
+    backup_type: form.backupType.trim() || "full",
+    expression: form.expression.trim(),
+    paused: form.paused,
+  };
+  const id = editingID || form.id.trim();
+  if (id) {
+    payload.id = id;
+  }
+  if (form.retentionPolicyID.trim()) {
+    payload.retention_policy_id = form.retentionPolicyID.trim();
+  }
+  return payload;
+}
+
 function stringOption(values: Record<string, unknown> | undefined, key: string) {
   const value = values?.[key];
   return typeof value === "string" ? value : "";
@@ -2085,6 +2351,22 @@ function updateOverviewJobCounts(current: Overview | null, previousStatus: strin
     attention: {
       ...current.attention,
       failed_jobs: Math.max(0, current.attention.failed_jobs + failedDelta),
+    },
+  };
+}
+
+function updateOverviewScheduleCounts(current: Overview | null, previous: Schedule | null | undefined, next: Schedule) {
+  if (!current) {
+    return current;
+  }
+  const createdDelta = previous ? 0 : 1;
+  const pausedDelta = (next.paused ? 1 : 0) - (previous?.paused ? 1 : 0);
+  return {
+    ...current,
+    inventory: {
+      ...current.inventory,
+      schedules: current.inventory.schedules + createdDelta,
+      schedules_paused: Math.max(0, current.inventory.schedules_paused + pausedDelta),
     },
   };
 }
