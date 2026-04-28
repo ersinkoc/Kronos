@@ -270,6 +270,13 @@ type RetentionPolicyForm = {
   rulesJSON: string;
 };
 
+type BackupRunForm = {
+  targetID: string;
+  storageID: string;
+  backupType: string;
+  parentID: string;
+};
+
 const emptyTargetForm: TargetForm = {
   id: "",
   name: "",
@@ -312,6 +319,13 @@ const emptyRetentionPolicyForm: RetentionPolicyForm = {
   id: "",
   name: "",
   rulesJSON: JSON.stringify([{ kind: "count", params: { n: 7 } }], null, 2),
+};
+
+const emptyBackupRunForm: BackupRunForm = {
+  targetID: "",
+  storageID: "",
+  backupType: "full",
+  parentID: "",
 };
 
 function AppLogo() {
@@ -375,6 +389,9 @@ export function App() {
   const [restorePlan, setRestorePlan] = useState<RestorePlan | null>(null);
   const [restoreJob, setRestoreJob] = useState<Job | null>(null);
   const [restoring, setRestoring] = useState<"preview" | "start" | "live" | null>(null);
+  const [backupRunForm, setBackupRunForm] = useState<BackupRunForm>(emptyBackupRunForm);
+  const [backupRunJob, setBackupRunJob] = useState<Job | null>(null);
+  const [queuingBackup, setQueuingBackup] = useState(false);
 
   async function loadOverview({ refresh = false }: { refresh?: boolean } = {}) {
     if (refresh) {
@@ -468,6 +485,33 @@ export function App() {
       setDetailError(err instanceof Error ? err.message : "backup protection update failed");
     } finally {
       setUpdatingBackupID(null);
+    }
+  }
+
+  async function queueBackup() {
+    if (!backupRunForm.targetID.trim() || !backupRunForm.storageID.trim()) {
+      setDetailError("backup target and storage are required");
+      return;
+    }
+    if ((backupRunForm.backupType === "incremental" || backupRunForm.backupType === "differential") && !backupRunForm.parentID.trim()) {
+      setDetailError("parent backup is required for incremental or differential backups");
+      return;
+    }
+    setQueuingBackup(true);
+    setDetailError(null);
+    try {
+      const job = await requestJSON<Job>("/api/v1/backups/now", apiToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(backupRunPayload(backupRunForm)),
+      });
+      setBackupRunJob(job);
+      setJobs((current) => sortJobs([job, ...current.filter((item) => item.id !== job.id)]).slice(0, 8));
+      setOverview((current) => updateOverviewJobCounts(current, "", job.status));
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "backup queue request failed");
+    } finally {
+      setQueuingBackup(false);
     }
   }
 
@@ -1046,7 +1090,7 @@ export function App() {
             <div className="flex items-center gap-2">
               <Button variant="ghost" title="Search" aria-label="Search" icon={<Search className="h-4 w-4" />} />
               <Button variant="ghost" title="Notifications" aria-label="Notifications" icon={<Bell className="h-4 w-4" />} />
-              <Button variant="primary" icon={<Play className="h-4 w-4" />}>
+              <Button variant="primary" icon={<Play className="h-4 w-4" />} onClick={() => void queueBackup()} type="button">
                 Run backup
               </Button>
             </div>
@@ -1143,6 +1187,17 @@ export function App() {
                   <HealthRow label="Schedules paused" value={metricValue(overview?.inventory.schedules_paused, loading)} tone="warning" />
                 </div>
               </section>
+
+              <BackupRunPanel
+                backups={backups}
+                form={backupRunForm}
+                job={backupRunJob}
+                queuing={queuingBackup}
+                storages={storages}
+                targets={targets}
+                onChange={(patch) => setBackupRunForm((current) => ({ ...current, ...patch }))}
+                onQueue={queueBackup}
+              />
 
               <section className="rounded-md border border-line bg-panel p-4">
                 <h2 className="text-base font-semibold">Inventory</h2>
@@ -1344,6 +1399,121 @@ function HealthRow({ label, value, tone }: { label: string; value: string; tone:
         {value}
       </span>
     </div>
+  );
+}
+
+function BackupRunPanel({
+  backups,
+  form,
+  job,
+  queuing,
+  storages,
+  targets,
+  onChange,
+  onQueue,
+}: {
+  backups: Backup[];
+  form: BackupRunForm;
+  job: Job | null;
+  queuing: boolean;
+  storages: Storage[];
+  targets: Target[];
+  onChange: (patch: Partial<BackupRunForm>) => void;
+  onQueue: () => Promise<void>;
+}) {
+  const needsParent = form.backupType === "incremental" || form.backupType === "differential";
+  const parentOptions = backups.filter((backup) => {
+    if (form.targetID && backup.target_id !== form.targetID) {
+      return false;
+    }
+    if (form.storageID && backup.storage_id !== form.storageID) {
+      return false;
+    }
+    return true;
+  });
+  const disabled = queuing || !form.targetID || !form.storageID || (needsParent && !form.parentID);
+  return (
+    <section className="rounded-md border border-line bg-panel p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">Backup drill</h2>
+        <Button className="h-7 px-2 text-xs" disabled={disabled} icon={<Play className="h-3.5 w-3.5" />} onClick={() => void onQueue()} type="button" variant="primary">
+          {queuing ? "Queuing" : "Queue"}
+        </Button>
+      </div>
+      <div className="mt-4 grid gap-3">
+        <div className="grid grid-cols-2 gap-2">
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="backup-target">
+            Target
+            <select
+              id="backup-target"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition focus:border-bronze"
+              value={form.targetID}
+              onChange={(event) => onChange({ targetID: event.target.value, parentID: "" })}
+            >
+              <option value="">select</option>
+              {targets.map((target) => (
+                <option key={target.id} value={target.id}>
+                  {target.name || target.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="backup-storage">
+            Storage
+            <select
+              id="backup-storage"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition focus:border-bronze"
+              value={form.storageID}
+              onChange={(event) => onChange({ storageID: event.target.value, parentID: "" })}
+            >
+              <option value="">select</option>
+              {storages.map((storage) => (
+                <option key={storage.id} value={storage.id}>
+                  {storage.name || storage.id}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="backup-type">
+            Type
+            <select
+              id="backup-type"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition focus:border-bronze"
+              value={form.backupType}
+              onChange={(event) => onChange({ backupType: event.target.value, parentID: event.target.value === "full" ? "" : form.parentID })}
+            >
+              <option value="full">full</option>
+              <option value="incremental">incremental</option>
+              <option value="differential">differential</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase text-muted" htmlFor="backup-parent">
+            Parent
+            <select
+              id="backup-parent"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm normal-case text-marble outline-none transition focus:border-bronze disabled:opacity-70"
+              disabled={!needsParent}
+              value={form.parentID}
+              onChange={(event) => onChange({ parentID: event.target.value })}
+            >
+              <option value="">{needsParent ? "select" : "none"}</option>
+              {parentOptions.map((backup) => (
+                <option key={backup.id} value={backup.id}>
+                  {backup.id}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {job ? (
+          <div className="rounded-md border border-success/35 bg-success/10 px-3 py-2 text-xs text-success">
+            Backup queued as {job.id}
+          </div>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -2484,6 +2654,18 @@ function retentionPolicyPayload(form: RetentionPolicyForm, editingID: string | n
 
 function isRetentionRule(value: unknown): value is RetentionPolicy["rules"][number] {
   return typeof value === "object" && value !== null && typeof (value as { kind?: unknown }).kind === "string" && (value as { kind: string }).kind.trim() !== "";
+}
+
+function backupRunPayload(form: BackupRunForm) {
+  const payload: Record<string, unknown> = {
+    target_id: form.targetID,
+    storage_id: form.storageID,
+    type: form.backupType,
+  };
+  if (form.parentID.trim()) {
+    payload.parent_id = form.parentID.trim();
+  }
+  return payload;
 }
 
 function stringOption(values: Record<string, unknown> | undefined, key: string) {

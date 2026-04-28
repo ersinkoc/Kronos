@@ -165,8 +165,8 @@ broad multi-database production suite. The largest remaining areas are:
   overview/jobs/backups/inventory dashboard plus
   target/storage/schedule/retention/job/backup detail, schedule pause/resume,
   target/storage/schedule/retention create/update editing, guarded target/storage
-  deletion, restore preview plus guarded dry-run/live restore queueing, job
-  cancel/retry, and backup protection actions, such as richer backup drill
+  deletion, manual backup drill queueing, restore preview plus guarded
+  dry-run/live restore queueing, job cancel/retry, and backup protection
   actions.
 - Richer notification channels and hook execution surfaces from the product
   plan.
@@ -179,7 +179,7 @@ broad multi-database production suite. The largest remaining areas are:
    targets and larger archive restore drills.
 2. Extend PostgreSQL hardening around broader upgrade rehearsal evidence.
 3. Expand the WebUI beyond the live overview dashboard and resource editing
-   into richer backup drill actions and restore workflows.
+   into richer backup verification and restore workflows.
 4. Add additional notification channels and hook execution surfaces.
 5. Run a signed-tag release rehearsal and archive checksum, signature, and
    attestation verification evidence.
