@@ -124,6 +124,7 @@ type Backup = {
   target_id: string;
   storage_id: string;
   type: string;
+  parent_id?: string;
   manifest_id?: string;
   started_at?: string;
   ended_at: string;
@@ -277,6 +278,12 @@ type BackupRunForm = {
   parentID: string;
 };
 
+type BackupVerificationReport = {
+  backupID: string;
+  ok: boolean;
+  checks: Array<{ label: string; ok: boolean; value: string }>;
+};
+
 const emptyTargetForm: TargetForm = {
   id: "",
   name: "",
@@ -392,6 +399,7 @@ export function App() {
   const [backupRunForm, setBackupRunForm] = useState<BackupRunForm>(emptyBackupRunForm);
   const [backupRunJob, setBackupRunJob] = useState<Job | null>(null);
   const [queuingBackup, setQueuingBackup] = useState(false);
+  const [backupVerificationReport, setBackupVerificationReport] = useState<BackupVerificationReport | null>(null);
 
   async function loadOverview({ refresh = false }: { refresh?: boolean } = {}) {
     if (refresh) {
@@ -515,6 +523,10 @@ export function App() {
     }
   }
 
+  function verifyBackupMetadata(backup: Backup) {
+    setBackupVerificationReport(backupMetadataReport(backup, backups));
+  }
+
   async function updateJob(job: Job, action: "cancel" | "retry") {
     setUpdatingJobID(job.id);
     setDetailError(null);
@@ -543,6 +555,7 @@ export function App() {
       setRestoreReplaceExisting(false);
       setRestorePlan(null);
       setRestoreJob(null);
+      setBackupVerificationReport(null);
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : "backup detail request failed");
     } finally {
@@ -1347,6 +1360,8 @@ export function App() {
               <JobDetail job={selectedJob} />
               <BackupDetail
                 backup={selectedBackup}
+                backups={backups}
+                report={backupVerificationReport}
                 restoreAt={restoreAt}
                 restoreConfirmation={restoreConfirmation}
                 restoreJob={restoreJob}
@@ -1362,6 +1377,7 @@ export function App() {
                 onStartLive={startLiveRestore}
                 onStartDryRun={startDryRunRestore}
                 onTargetChange={setRestoreTargetID}
+                onVerify={verifyBackupMetadata}
               />
             </aside>
           </div>
@@ -2297,6 +2313,8 @@ function JobDetail({ job }: { job: Job | null }) {
 
 function BackupDetail({
   backup,
+  backups,
+  report,
   restoreAt,
   restoreConfirmation,
   restoreJob,
@@ -2312,8 +2330,11 @@ function BackupDetail({
   onStartLive,
   onStartDryRun,
   onTargetChange,
+  onVerify,
 }: {
   backup: Backup | null;
+  backups: Backup[];
+  report: BackupVerificationReport | null;
   restoreAt: string;
   restoreConfirmation: string;
   restoreJob: Job | null;
@@ -2329,10 +2350,12 @@ function BackupDetail({
   onStartLive: () => Promise<void>;
   onStartDryRun: () => Promise<void>;
   onTargetChange: (value: string) => void;
+  onVerify: (backup: Backup) => void;
 }) {
   if (!backup) {
     return null;
   }
+  const chainLabel = backup.parent_id ? (backups.some((item) => item.id === backup.parent_id) ? backup.parent_id : `${backup.parent_id} not loaded`) : "root";
   return (
     <section className="rounded-md border border-line bg-panel p-4">
       <h2 className="text-base font-semibold">Backup detail</h2>
@@ -2341,10 +2364,20 @@ function BackupDetail({
         <HealthRow label="Type" value={backup.type || "-"} tone="indigo" />
         <HealthRow label="Target" value={backup.target_id || "-"} tone="bronze" />
         <HealthRow label="Storage" value={backup.storage_id || "-"} tone="indigo" />
+        <HealthRow label="Parent" value={chainLabel} tone={backup.parent_id && !backups.some((item) => item.id === backup.parent_id) ? "warning" : "bronze"} />
         <HealthRow label="Chunks" value={metricValue(backup.chunk_count, false)} tone="warning" />
         <HealthRow label="Size" value={formatBytes(backup.size_bytes)} tone="success" />
         <HealthRow label="Manifest" value={backup.manifest_id || "-"} tone="bronze" />
         <HealthRow label="Ended" value={formatDateTime(backup.ended_at) ?? "-"} tone="indigo" />
+      </div>
+      <div className="mt-5 border-t border-line pt-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-marble">Metadata verification</h3>
+          <Button className="h-8 text-xs" onClick={() => onVerify(backup)} type="button" variant="secondary">
+            Check metadata
+          </Button>
+        </div>
+        {report && report.backupID === backup.id ? <BackupVerificationDetail report={report} /> : null}
       </div>
       <div className="mt-5 border-t border-line pt-4">
         <h3 className="text-sm font-semibold text-marble">Restore validation</h3>
@@ -2437,6 +2470,17 @@ function RestorePlanDetail({ plan }: { plan: RestorePlan }) {
         <HealthRow key={`${step.backup_id}-${index}`} label={`Step ${index + 1}`} value={`${step.type || "backup"} ${step.backup_id}`} tone="bronze" />
       ))}
       {plan.warnings && plan.warnings.length > 0 ? <HealthRow label="Warnings" value={plan.warnings.join(", ")} tone="warning" /> : null}
+    </div>
+  );
+}
+
+function BackupVerificationDetail({ report }: { report: BackupVerificationReport }) {
+  return (
+    <div className="mt-4 grid gap-3">
+      <HealthRow label="Status" value={report.ok ? "ready" : "attention"} tone={report.ok ? "success" : "warning"} />
+      {report.checks.map((check) => (
+        <HealthRow key={check.label} label={check.label} value={check.value} tone={check.ok ? "success" : "warning"} />
+      ))}
     </div>
   );
 }
@@ -2666,6 +2710,53 @@ function backupRunPayload(form: BackupRunForm) {
     payload.parent_id = form.parentID.trim();
   }
   return payload;
+}
+
+function backupMetadataReport(backup: Backup, backups: Backup[]): BackupVerificationReport {
+  const checks = [
+    {
+      label: "Manifest",
+      ok: Boolean(backup.manifest_id),
+      value: backup.manifest_id || "missing",
+    },
+    {
+      label: "Chunks",
+      ok: (backup.chunk_count ?? 0) > 0,
+      value: metricValue(backup.chunk_count, false),
+    },
+    {
+      label: "Size",
+      ok: backup.size_bytes >= 0,
+      value: formatBytes(backup.size_bytes),
+    },
+    {
+      label: "Chain",
+      ok: backupChainReady(backup, backups),
+      value: backup.parent_id || "root",
+    },
+    {
+      label: "Ended",
+      ok: Boolean(formatDateTime(backup.ended_at)),
+      value: formatDateTime(backup.ended_at) ?? "missing",
+    },
+    {
+      label: "Protection",
+      ok: true,
+      value: backup.protected ? "protected" : "unprotected",
+    },
+  ];
+  return {
+    backupID: backup.id,
+    ok: checks.every((check) => check.ok),
+    checks,
+  };
+}
+
+function backupChainReady(backup: Backup, backups: Backup[]) {
+  if (backup.type !== "incremental" && backup.type !== "differential") {
+    return true;
+  }
+  return Boolean(backup.parent_id && backups.some((item) => item.id === backup.parent_id));
 }
 
 function stringOption(values: Record<string, unknown> | undefined, key: string) {
