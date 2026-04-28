@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -37,13 +38,15 @@ func TestMongoDBDriverConformanceBackupRestore(t *testing.T) {
 	restoreAddr := firstNonEmpty(strings.TrimSpace(os.Getenv("KRONOS_MONGODB_RESTORE_ADDR")), sourceAddr)
 	sourceUser := strings.TrimSpace(os.Getenv("KRONOS_MONGODB_TEST_USER"))
 	sourcePassword := os.Getenv("KRONOS_MONGODB_TEST_PASSWORD")
+	sourceAuthSource := firstNonEmpty(strings.TrimSpace(os.Getenv("KRONOS_MONGODB_TEST_AUTH_SOURCE")), "admin")
 	restoreUser := firstNonEmpty(strings.TrimSpace(os.Getenv("KRONOS_MONGODB_RESTORE_USER")), sourceUser)
 	restorePassword := firstNonEmpty(os.Getenv("KRONOS_MONGODB_RESTORE_PASSWORD"), sourcePassword)
-	sourceAdmin := mongoTestTarget(sourceAddr, "admin", sourceUser, sourcePassword)
-	restoreAdmin := mongoTestTarget(restoreAddr, "admin", restoreUser, restorePassword)
-	sourceTarget := mongoTestTarget(sourceAddr, sourceDB, sourceUser, sourcePassword)
-	restoreTarget := mongoTestTarget(restoreAddr, restoreDB, restoreUser, restorePassword)
-	restoreCommandTarget := mongoRestoreCommandTarget(restoreAddr, restoreDB, restoreUser, restorePassword)
+	restoreAuthSource := firstNonEmpty(strings.TrimSpace(os.Getenv("KRONOS_MONGODB_RESTORE_AUTH_SOURCE")), sourceAuthSource)
+	sourceAdmin := mongoTestTarget(sourceAddr, "admin", sourceUser, sourcePassword, sourceAuthSource)
+	restoreAdmin := mongoTestTarget(restoreAddr, "admin", restoreUser, restorePassword, restoreAuthSource)
+	sourceTarget := mongoTestTarget(sourceAddr, sourceDB, sourceUser, sourcePassword, sourceAuthSource)
+	restoreTarget := mongoTestTarget(restoreAddr, restoreDB, restoreUser, restorePassword, restoreAuthSource)
+	restoreCommandTarget := mongoRestoreCommandTarget(restoreAddr, restoreDB, restoreUser, restorePassword, restoreAuthSource)
 	sourceTarget.Options = map[string]string{"connection_test_collection": "users"}
 
 	cleanupMongoDatabase(t, ctx, sourceAdmin, sourceDB)
@@ -96,6 +99,18 @@ func TestMongoDBDriverConformanceBackupRestore(t *testing.T) {
 	}
 	if got := queryMongoScalar(t, ctx, restoreTarget, `db.bulk_items.getIndexes().some((idx) => idx.name === "bulk_items_label_idx")`); got != "true" {
 		t.Fatalf("restored bulk index presence = %q, want true", got)
+	}
+}
+
+func TestMongoRestoreCommandTargetIncludesAuthSource(t *testing.T) {
+	t.Parallel()
+
+	target := mongoRestoreCommandTarget("127.0.0.1:27019", "restore_db", "backup", "secret", "admin")
+	uri := target.Connection["uri"]
+	for _, want := range []string{"mongodb://backup:secret@127.0.0.1:27019/", "authSource=admin"} {
+		if !strings.Contains(uri, want) {
+			t.Fatalf("restore command uri = %q, missing %q", uri, want)
+		}
 	}
 }
 
@@ -153,7 +168,7 @@ func mongoTestTimeout(t *testing.T) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
-func mongoTestTarget(addr string, database string, username string, password string) drivers.Target {
+func mongoTestTarget(addr string, database string, username string, password string, authSource string) drivers.Target {
 	connection := map[string]string{
 		"addr":     addr,
 		"database": database,
@@ -164,11 +179,14 @@ func mongoTestTarget(addr string, database string, username string, password str
 	if password != "" {
 		connection["password"] = password
 	}
+	if username != "" && authSource != "" {
+		connection["authSource"] = authSource
+	}
 	return drivers.Target{Connection: connection}
 }
 
-func mongoRestoreCommandTarget(addr string, database string, username string, password string) drivers.Target {
-	target := mongoTestTarget(addr, database, username, password)
+func mongoRestoreCommandTarget(addr string, database string, username string, password string, authSource string) drivers.Target {
+	target := mongoTestTarget(addr, database, username, password, authSource)
 	host, port := splitAddress(addr)
 	if host == "" {
 		host = "127.0.0.1"
@@ -176,7 +194,22 @@ func mongoRestoreCommandTarget(addr string, database string, username string, pa
 	if port == "" {
 		port = "27017"
 	}
-	target.Connection["uri"] = "mongodb://" + netJoinHostPort(host, port)
+	uri := url.URL{
+		Scheme: "mongodb",
+		Host:   netJoinHostPort(host, port),
+		Path:   "/",
+	}
+	if username != "" && password != "" {
+		uri.User = url.UserPassword(username, password)
+	} else if username != "" {
+		uri.User = url.User(username)
+	}
+	if username != "" && authSource != "" {
+		query := uri.Query()
+		query.Set("authSource", authSource)
+		uri.RawQuery = query.Encode()
+	}
+	target.Connection["uri"] = uri.String()
 	return target
 }
 

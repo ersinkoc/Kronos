@@ -423,10 +423,13 @@ jobs:
     services:
       mongodb:
         image: mongodb/mongodb-community-server:7.0-ubuntu2204
+        env:
+          MONGO_INITDB_ROOT_USERNAME: kronos
+          MONGO_INITDB_ROOT_PASSWORD: kronos
         ports:
           - 27017:27017
         options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-cmd "mongosh --quiet -u kronos -p kronos --authenticationDatabase admin --eval 'db.adminCommand(\"ping\").ok'"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -459,6 +462,9 @@ jobs:
       - name: MongoDB conformance
         env:
           KRONOS_MONGODB_TEST_ADDR: 127.0.0.1:27017
+          KRONOS_MONGODB_TEST_USER: kronos
+          KRONOS_MONGODB_TEST_PASSWORD: kronos
+          KRONOS_MONGODB_TEST_AUTH_SOURCE: admin
           MONGODB_IMAGE: mongodb/mongodb-community-server:7.0-ubuntu2204
         run: go test -tags=integration ./internal/drivers/mongodb
 
@@ -468,19 +474,25 @@ jobs:
     services:
       mongodb-source:
         image: mongodb/mongodb-community-server:7.0-ubuntu2204
+        env:
+          MONGO_INITDB_ROOT_USERNAME: kronos
+          MONGO_INITDB_ROOT_PASSWORD: kronos
         ports:
           - 27018:27017
         options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-cmd "mongosh --quiet -u kronos -p kronos --authenticationDatabase admin --eval 'db.adminCommand(\"ping\").ok'"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
       mongodb-target:
         image: mongodb/mongodb-community-server:7.0-ubuntu2204
+        env:
+          MONGO_INITDB_ROOT_USERNAME: kronos
+          MONGO_INITDB_ROOT_PASSWORD: kronos
         ports:
           - 27019:27017
         options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-cmd "mongosh --quiet -u kronos -p kronos --authenticationDatabase admin --eval 'db.adminCommand(\"ping\").ok'"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -514,6 +526,12 @@ jobs:
         env:
           KRONOS_MONGODB_TEST_ADDR: 127.0.0.1:27018
           KRONOS_MONGODB_RESTORE_ADDR: 127.0.0.1:27019
+          KRONOS_MONGODB_TEST_USER: kronos
+          KRONOS_MONGODB_TEST_PASSWORD: kronos
+          KRONOS_MONGODB_TEST_AUTH_SOURCE: admin
+          KRONOS_MONGODB_RESTORE_USER: kronos
+          KRONOS_MONGODB_RESTORE_PASSWORD: kronos
+          KRONOS_MONGODB_RESTORE_AUTH_SOURCE: admin
           KRONOS_MONGODB_BULK_ROWS: "10000"
           KRONOS_MONGODB_TEST_TIMEOUT_SECONDS: "300"
           MONGODB_IMAGE: mongodb/mongodb-community-server:7.0-ubuntu2204

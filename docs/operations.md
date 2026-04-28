@@ -281,8 +281,11 @@ groups:
    separate MongoDB service. MongoDB non-dry-run restores require explicit
    replace-existing intent and replay through `mongorestore --archive --drop`
    with namespace remapping when the source and target database names differ.
-   The main CI workflow runs MongoDB 7.0 conformance and a 10,000-document
-   restore drill against separate source and target service containers.
+   Set `KRONOS_MONGODB_TEST_USER`, `KRONOS_MONGODB_TEST_PASSWORD`, and
+   `KRONOS_MONGODB_TEST_AUTH_SOURCE` when the service requires authentication.
+   The main CI workflow runs authenticated MongoDB 7.0 conformance and an
+   authenticated 10,000-document restore drill against separate source and
+   target service containers.
 
 2. Publish an immutable release from a signed tag when cutting a production
    version:
