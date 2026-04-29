@@ -260,7 +260,7 @@ func queryMongoScalar(t *testing.T, ctx context.Context, target drivers.Target, 
 	t.Helper()
 
 	cmd := exec.CommandContext(ctx, "mongosh", "--quiet", mongoShellURI(target))
-	cmd.Stdin = strings.NewReader(mongoShellScript(target, "print("+script+");"))
+	cmd.Stdin = strings.NewReader(mongoShellScript(target, `print("KRONOS_RESULT:" + (`+script+`));`))
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -268,6 +268,12 @@ func queryMongoScalar(t *testing.T, ctx context.Context, target drivers.Target, 
 		t.Fatalf("query %q error = %v output=%s stderr=%s", script, err, strings.TrimSpace(string(out)), strings.TrimSpace(stderr.String()))
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if value, ok := strings.CutPrefix(line, "KRONOS_RESULT:"); ok {
+			return strings.TrimSpace(value)
+		}
+	}
 	return strings.TrimSpace(lines[len(lines)-1])
 }
 
