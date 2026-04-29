@@ -1,6 +1,8 @@
 package server
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,6 +63,84 @@ func TestTargetStoreSaveGetListDeleteReopen(t *testing.T) {
 	}
 	if _, ok, err := store.Get("target-a"); err != nil || ok {
 		t.Fatalf("Get(deleted) ok=%v err=%v, want missing", ok, err)
+	}
+}
+
+func TestResourceStoresProtectSensitiveOptionsAtRest(t *testing.T) {
+	t.Parallel()
+
+	path := t.TempDir() + "/state.db"
+	protector, err := NewStateSecretProtector("state-passphrase")
+	if err != nil {
+		t.Fatalf("NewStateSecretProtector() error = %v", err)
+	}
+	db, err := kvstore.Open(path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	targets, err := NewTargetStore(db)
+	if err != nil {
+		t.Fatalf("NewTargetStore() error = %v", err)
+	}
+	targets.SetSecretProtector(protector)
+	storages, err := NewStorageStore(db)
+	if err != nil {
+		t.Fatalf("NewStorageStore() error = %v", err)
+	}
+	storages.SetSecretProtector(protector)
+	if err := targets.Save(core.Target{ID: "target-1", Name: "pg", Driver: core.TargetDriverPostgres, Endpoint: "127.0.0.1:5432", Options: map[string]any{"password": "pg-secret", "tls": "disable"}}); err != nil {
+		t.Fatalf("Save(target) error = %v", err)
+	}
+	if err := storages.Save(core.Storage{ID: "storage-1", Name: "s3", Kind: core.StorageKindS3, URI: "s3://bucket", Options: map[string]any{"secret_key": "s3-secret", "region": "eu-north-1"}}); err != nil {
+		t.Fatalf("Save(storage) error = %v", err)
+	}
+	gotTarget, ok, err := targets.Get("target-1")
+	if err != nil || !ok {
+		t.Fatalf("Get(target) ok=%v err=%v", ok, err)
+	}
+	if gotTarget.Options["password"] != "pg-secret" || gotTarget.Options["tls"] != "disable" {
+		t.Fatalf("target options = %#v", gotTarget.Options)
+	}
+	gotStorage, ok, err := storages.Get("storage-1")
+	if err != nil || !ok {
+		t.Fatalf("Get(storage) ok=%v err=%v", ok, err)
+	}
+	if gotStorage.Options["secret_key"] != "s3-secret" || gotStorage.Options["region"] != "eu-north-1" {
+		t.Fatalf("storage options = %#v", gotStorage.Options)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(state) error = %v", err)
+	}
+	for _, leaked := range []string{"pg-secret", "s3-secret"} {
+		if strings.Contains(string(raw), leaked) {
+			t.Fatalf("state db leaked %q", leaked)
+		}
+	}
+
+	reopened, err := kvstore.Open(path)
+	if err != nil {
+		t.Fatalf("Open(reopen) error = %v", err)
+	}
+	defer reopened.Close()
+	unprotected, err := NewTargetStore(reopened)
+	if err != nil {
+		t.Fatalf("NewTargetStore(unprotected) error = %v", err)
+	}
+	if _, _, err := unprotected.Get("target-1"); err == nil {
+		t.Fatal("Get(encrypted target without protector) error = nil, want error")
+	}
+	protected, err := NewTargetStore(reopened)
+	if err != nil {
+		t.Fatalf("NewTargetStore(protected) error = %v", err)
+	}
+	protected.SetSecretProtector(protector)
+	gotTarget, ok, err = protected.Get("target-1")
+	if err != nil || !ok || gotTarget.Options["password"] != "pg-secret" {
+		t.Fatalf("Get(protected target) = %#v ok=%v err=%v", gotTarget, ok, err)
 	}
 }
 

@@ -227,6 +227,9 @@ export KRONOS_CHUNK_KEY=<32-byte-hex-key>
 
 Config secret placeholders support environment variables and files, including
 structured JSON/YAML selectors such as `${file:secrets.yaml#database.password}`.
+When `server.master_passphrase` is configured, sensitive target and storage
+option values are encrypted before being written to the control-plane state DB
+and decrypted on authorized reads.
 
 ## Verify A Backup Manifest
 

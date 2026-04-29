@@ -99,6 +99,11 @@ func serveControlPlaneWithOptions(ctx context.Context, out io.Writer, listenAddr
 			return err
 		}
 		stores = openedStores
+		if err := applyStoreSecretProtection(stores, cfg); err != nil {
+			db.Close()
+			listener.Close()
+			return err
+		}
 		if err := seedAPIStoresFromConfig(stores, cfg, time.Now().UTC()); err != nil {
 			db.Close()
 			listener.Close()
@@ -682,6 +687,11 @@ func newServerHandlerWithStores(cfg *config.Config, registry *control.AgentRegis
 func newServerHandlerWithStoresAuth(cfg *config.Config, registry *control.AgentRegistry, stores apiStores, insecureNoAuth bool) http.Handler {
 	if registry == nil {
 		registry = control.NewAgentRegistry(nil, 30*time.Second)
+	}
+	if err := applyStoreSecretProtection(stores, cfg); err != nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "configure state secret protection", http.StatusInternalServerError)
+		})
 	}
 	startedAt := time.Now().UTC()
 	authLimiter := newAuthRateLimiter(authRateLimitSettings(cfg))
@@ -1268,6 +1278,23 @@ func newServerHandlerWithStoresAuth(cfg *config.Config, registry *control.AgentR
 	})
 	mux.Handle("/", webui.Handler())
 	return withSecurityHeaders(withControlPlaneCacheHeaders(withRequestID(withAuthPolicy(mux, insecureNoAuth))))
+}
+
+func applyStoreSecretProtection(stores apiStores, cfg *config.Config) error {
+	if cfg == nil || strings.TrimSpace(cfg.Server.MasterPassphrase) == "" {
+		return nil
+	}
+	protector, err := control.NewStateSecretProtector(cfg.Server.MasterPassphrase)
+	if err != nil {
+		return err
+	}
+	if stores.targets != nil {
+		stores.targets.SetSecretProtector(protector)
+	}
+	if stores.storages != nil {
+		stores.storages.SetSecretProtector(protector)
+	}
+	return nil
 }
 
 func allowMethods(w http.ResponseWriter, r *http.Request, methods ...string) bool {

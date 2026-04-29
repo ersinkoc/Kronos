@@ -37,7 +37,8 @@ Kronos has a strong core: CLI, HTTP control plane, agent worker, persistent KV s
 - [ ] Add password hashing and role enforcement beyond token scopes.
 - [ ] Add TOTP for admin or remove that claim from MVP docs.
 - [ ] Add TLS/mTLS deployment path and secure agent enrollment.
-- [ ] Move stored credentials to secret references or encrypted-at-rest secret records.
+- [x] Add encrypted-at-rest state records for sensitive target/storage options when `server.master_passphrase` is configured.
+- [ ] Move stored credentials to external secret references for deployments that require secret-manager-backed credentials.
 - [ ] Normalize JSON error response format across all REST handlers.
 - [ ] Add broad input validation for resource IDs, URI schemes, cron expressions, and option schemas.
 - [ ] Add request/body size limits and timeouts to API handlers.

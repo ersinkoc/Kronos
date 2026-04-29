@@ -71,6 +71,7 @@ func runConfigInspect(ctx context.Context, out io.Writer, args []string) error {
 
 func redactConfig(cfg config.Config) config.Config {
 	cfg.Server.MasterPassphrase = redactString(cfg.Server.MasterPassphrase)
+	cfg.Server.Auth.BootstrapToken = redactString(cfg.Server.Auth.BootstrapToken)
 	cfg.Server.Auth.OIDC.ClientSecret = redactString(cfg.Server.Auth.OIDC.ClientSecret)
 	for i := range cfg.Projects {
 		project := &cfg.Projects[i]

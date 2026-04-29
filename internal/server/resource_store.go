@@ -22,12 +22,14 @@ var (
 
 // TargetStore persists target definitions.
 type TargetStore struct {
-	db *kvstore.DB
+	db        *kvstore.DB
+	protector *StateSecretProtector
 }
 
 // StorageStore persists storage backend definitions.
 type StorageStore struct {
-	db *kvstore.DB
+	db        *kvstore.DB
+	protector *StateSecretProtector
 }
 
 // ScheduleStore persists schedule definitions.
@@ -58,12 +60,22 @@ func NewTargetStore(db *kvstore.DB) (*TargetStore, error) {
 	return &TargetStore{db: db}, nil
 }
 
+// SetSecretProtector enables at-rest protection for sensitive target options.
+func (s *TargetStore) SetSecretProtector(protector *StateSecretProtector) {
+	s.protector = protector
+}
+
 // NewStorageStore returns a storage store backed by db.
 func NewStorageStore(db *kvstore.DB) (*StorageStore, error) {
 	if db == nil {
 		return nil, fmt.Errorf("kv database is required")
 	}
 	return &StorageStore{db: db}, nil
+}
+
+// SetSecretProtector enables at-rest protection for sensitive storage options.
+func (s *StorageStore) SetSecretProtector(protector *StateSecretProtector) {
+	s.protector = protector
 }
 
 // NewScheduleStore returns a schedule store backed by db.
@@ -103,6 +115,11 @@ func (s *TargetStore) Save(target core.Target) error {
 	if err := validateTarget(target); err != nil {
 		return err
 	}
+	var err error
+	target.Options, err = s.protector.protectOptions(target.Options)
+	if err != nil {
+		return err
+	}
 	return saveJSON(s.db, targetsBucket, []byte(target.ID), target)
 }
 
@@ -110,6 +127,10 @@ func (s *TargetStore) Save(target core.Target) error {
 func (s *TargetStore) Get(id core.ID) (core.Target, bool, error) {
 	var target core.Target
 	ok, err := getJSON(s.db, targetsBucket, []byte(id), &target)
+	if err != nil || !ok {
+		return target, ok, err
+	}
+	target.Options, err = s.protector.revealOptions(target.Options)
 	return target, ok, err
 }
 
@@ -119,6 +140,11 @@ func (s *TargetStore) List() ([]core.Target, error) {
 	if err := listJSON(s.db, targetsBucket, func(data []byte) error {
 		var target core.Target
 		if err := json.Unmarshal(data, &target); err != nil {
+			return err
+		}
+		var err error
+		target.Options, err = s.protector.revealOptions(target.Options)
+		if err != nil {
 			return err
 		}
 		targets = append(targets, target)
@@ -145,6 +171,11 @@ func (s *StorageStore) Save(storage core.Storage) error {
 	if err := validateStorage(storage); err != nil {
 		return err
 	}
+	var err error
+	storage.Options, err = s.protector.protectOptions(storage.Options)
+	if err != nil {
+		return err
+	}
 	return saveJSON(s.db, storagesBucket, []byte(storage.ID), storage)
 }
 
@@ -152,6 +183,10 @@ func (s *StorageStore) Save(storage core.Storage) error {
 func (s *StorageStore) Get(id core.ID) (core.Storage, bool, error) {
 	var storage core.Storage
 	ok, err := getJSON(s.db, storagesBucket, []byte(id), &storage)
+	if err != nil || !ok {
+		return storage, ok, err
+	}
+	storage.Options, err = s.protector.revealOptions(storage.Options)
 	return storage, ok, err
 }
 
@@ -161,6 +196,11 @@ func (s *StorageStore) List() ([]core.Storage, error) {
 	if err := listJSON(s.db, storagesBucket, func(data []byte) error {
 		var storage core.Storage
 		if err := json.Unmarshal(data, &storage); err != nil {
+			return err
+		}
+		var err error
+		storage.Options, err = s.protector.revealOptions(storage.Options)
+		if err != nil {
 			return err
 		}
 		storages = append(storages, storage)

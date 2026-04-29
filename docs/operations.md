@@ -188,6 +188,11 @@ Notification secrets are redacted from API and CLI output by default. Use
 `include_secrets=true` only for controlled break-glass inspection paths that
 also have `notification:write`.
 
+Set `server.master_passphrase`, preferably through an environment or file
+placeholder, to encrypt sensitive target and storage option values in the
+control-plane state DB. Keep this passphrase stable and backed up; encrypted
+resource options fail closed if the server starts without it.
+
 ## Alert Rule Examples
 
 Use these Prometheus rules as a starting point and tune thresholds to match your

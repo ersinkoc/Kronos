@@ -93,14 +93,14 @@ KV has WAL/repair coverage and server restart recovery for active jobs. Agent cr
 - [x] `.env` style files are ignored by policy, but workspace contains generated/bin artifacts.
 - [x] Env/file placeholder expansion exists.
 - [x] Secret-like output redaction exists.
-- [ ] Secrets can be stored as plaintext in control-plane KV resource options.
+- [x] Sensitive target/storage option values can be encrypted in the control-plane KV store when `server.master_passphrase` is configured.
 - [x] PostgreSQL/MongoDB process arguments no longer contain password material in the implemented tool-wrapper paths.
 
 ### 3.5 Security Vulnerabilities Found
 
 1. **High** — Unauthenticated local/no-token mode is unsafe if bound outside loopback. Mitigation: require explicit insecure dev mode and refuse public binds without auth.
-2. **High** — Plaintext persisted secrets in `state.db`. Mitigation: reference external secrets or encrypt secret records.
-3. **Reduced** — PostgreSQL/MongoDB command-argument password exposure was fixed on 2026-04-29. Remaining risk is host-level exposure through environment variables, temporary config files, and persisted target credentials until native drivers or stronger secret management land.
+2. **Reduced** — Plaintext persisted target/storage option secrets can now be encrypted with `server.master_passphrase`. Remaining risk: deployments must configure and back up the passphrase, and external secret references are still preferable for stricter environments.
+3. **Reduced** — PostgreSQL/MongoDB command-argument password exposure was fixed on 2026-04-29. Remaining risk is host-level exposure through environment variables and temporary config files until native drivers or stronger secret management land.
 4. **Medium** — WebUI token in localStorage. Mitigation: short-lived tokens, CSP hardening, possible memory-only storage or secure cookie design.
 
 ## 4. Performance Assessment
@@ -219,7 +219,7 @@ Critical paths needing more coverage: corrupted/missing chunks, broader auth byp
 
 1. The implementation violates the central no-shell-out database-driver requirement for PostgreSQL, MySQL/MariaDB, and MongoDB.
 2. Production auth is incomplete beyond bootstrap-token-protected initial setup: no password login, enforced TOTP, OIDC, or mTLS.
-3. Secrets can persist in plaintext state and still have host-level exposure through env/temp-file patterns.
+3. Secret safety depends on configuring `server.master_passphrase`; host-level exposure through env/temp-file patterns remains.
 4. PITR/incremental stream/replay paths are absent for the main SQL/document databases.
 5. PITR, gRPC, MCP, and several promised storage backends are missing.
 

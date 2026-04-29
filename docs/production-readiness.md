@@ -118,6 +118,8 @@ run.
   `server.auth.bootstrap_token` protection for the one-time bootstrap endpoint,
   scoped bearer tokens, role-capped token creation, token lifecycle operations,
   request IDs, security headers, and mutation audit events.
+- Optional state DB encryption for sensitive target/storage option values via
+  `server.master_passphrase`.
 - Health, readiness, metrics, OpenAPI, operations docs, deployment topology
   docs, single-replica Kubernetes deployment examples, restore drill docs,
   release verification docs, release scripts, provenance metadata, SBOM

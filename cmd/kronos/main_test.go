@@ -223,6 +223,7 @@ projects:
 
 func TestRunConfigInspectRedactsSecrets(t *testing.T) {
 	t.Setenv("KRONOS_TEST_OIDC_SECRET", "oidc-secret")
+	t.Setenv("KRONOS_TEST_BOOTSTRAP", "bootstrap-secret")
 	t.Setenv("KRONOS_TEST_MASTER", "master-secret")
 	t.Setenv("KRONOS_TEST_STORAGE_KEY", "storage-secret")
 	t.Setenv("KRONOS_TEST_PG_PASSWORD", "pg-secret")
@@ -233,6 +234,7 @@ server:
   listen: "127.0.0.1:8500"
   data_dir: "/tmp/kronos"
   auth:
+    bootstrap_token: "${env:KRONOS_TEST_BOOTSTRAP}"
     oidc:
       issuer: "https://id.example.com"
       client_id: "kronos"
@@ -273,7 +275,7 @@ projects:
 		t.Fatalf("config inspect error = %v", err)
 	}
 	text := out.String()
-	for _, leaked := range []string{"oidc-secret", "master-secret", "storage-secret", "age-secret", "pg-secret", "target-token"} {
+	for _, leaked := range []string{"oidc-secret", "bootstrap-secret", "master-secret", "storage-secret", "age-secret", "pg-secret", "target-token"} {
 		if strings.Contains(text, leaked) {
 			t.Fatalf("config inspect leaked %q:\n%s", leaked, text)
 		}
@@ -354,7 +356,7 @@ func TestRedactConfigLeavesEmptySecretsEmpty(t *testing.T) {
 			Targets:  []config.TargetConfig{{Options: map[string]any{"password": "", "tls": "disable"}}},
 		}},
 	})
-	if cfg.Server.MasterPassphrase != "" || cfg.Projects[0].Storages[0].Options["secret_key"] != "***REDACTED***" || cfg.Projects[0].Targets[0].Options["password"] != "***REDACTED***" {
+	if cfg.Server.MasterPassphrase != "" || cfg.Server.Auth.BootstrapToken != "" || cfg.Projects[0].Storages[0].Options["secret_key"] != "***REDACTED***" || cfg.Projects[0].Targets[0].Options["password"] != "***REDACTED***" {
 		t.Fatalf("redacted config = %#v", cfg)
 	}
 	if cfg.Projects[0].Storages[0].Options["endpoint"] != "http://localhost" || cfg.Projects[0].Targets[0].Options["tls"] != "disable" {
