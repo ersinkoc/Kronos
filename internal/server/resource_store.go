@@ -585,6 +585,9 @@ func validateUser(user core.User) error {
 	if !validRole(user.Role) {
 		return fmt.Errorf("invalid user role %q", user.Role)
 	}
+	if user.TOTPEnforced {
+		return fmt.Errorf("user totp_enforced is not supported by token-only auth")
+	}
 	return nil
 }
 

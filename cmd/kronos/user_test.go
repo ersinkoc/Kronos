@@ -135,6 +135,9 @@ func TestRunUserRequiresFields(t *testing.T) {
 	if err := run(context.Background(), &out, []string{"user", "add", "--email", "ops@example.com"}); err == nil {
 		t.Fatal("user add without display name error = nil, want error")
 	}
+	if err := run(context.Background(), &out, []string{"user", "add", "--email", "ops@example.com", "--display-name", "Ops", "--totp"}); err == nil {
+		t.Fatal("user add --totp error = nil, want error")
+	}
 	if err := run(context.Background(), &out, []string{"user", "grant", "--role", "operator"}); err == nil {
 		t.Fatal("user grant without id error = nil, want error")
 	}

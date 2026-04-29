@@ -68,7 +68,6 @@ func runUserAdd(ctx context.Context, out io.Writer, args []string) error {
 	email := fs.String("email", "", "user email")
 	displayName := fs.String("display-name", "", "display name")
 	role := fs.String("role", string(core.RoleViewer), "role: admin, operator, or viewer")
-	totp := fs.Bool("totp", false, "require TOTP for this user")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -79,11 +78,10 @@ func runUserAdd(ctx context.Context, out io.Writer, args []string) error {
 		return fmt.Errorf("--display-name is required")
 	}
 	payload := core.User{
-		ID:           core.ID(*id),
-		Email:        *email,
-		DisplayName:  *displayName,
-		Role:         core.RoleName(*role),
-		TOTPEnforced: *totp,
+		ID:          core.ID(*id),
+		Email:       *email,
+		DisplayName: *displayName,
+		Role:        core.RoleName(*role),
 	}
 	return postControlJSON(ctx, http.DefaultClient, *serverAddr, "/api/v1/users", payload, out)
 }

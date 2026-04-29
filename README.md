@@ -208,6 +208,8 @@ Common scope families are `backup`, `target`, `storage`, `schedule`, `job`,
 using `:read` or `:write` where applicable. `overview` uses `metrics:read`.
 Requested token scopes are capped by the token user's role when the token is
 created and by the user's current role on every authenticated request.
+The implemented authentication surface is token-only; local password login and
+TOTP are intentionally not accepted until that login flow exists.
 
 Agents can use the same bearer secret through `KRONOS_TOKEN` or
 `kronos agent --token <secret>` and advertise concurrency with

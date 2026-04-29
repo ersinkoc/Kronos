@@ -75,6 +75,9 @@ func TestUserStoreValidation(t *testing.T) {
 	if err := store.Save(core.User{ID: "user-1", Email: "a@example.com", DisplayName: "A", Role: "root"}); err == nil {
 		t.Fatal("Save(bad role) error = nil, want error")
 	}
+	if err := store.Save(core.User{ID: "user-1", Email: "a@example.com", DisplayName: "A", Role: core.RoleAdmin, TOTPEnforced: true}); err == nil {
+		t.Fatal("Save(totp enforced) error = nil, want error")
+	}
 	if _, err := store.Grant("missing", core.RoleViewer, time.Time{}); !errors.Is(err, core.ErrNotFound) {
 		t.Fatalf("Grant(missing) error = %v, want ErrNotFound", err)
 	}

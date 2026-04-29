@@ -173,6 +173,8 @@ Common scope families are `backup`, `target`, `storage`, `schedule`, `job`,
 `metrics`, each using `:read` or `:write` where applicable. `overview` uses
 `metrics:read`. Requested token scopes are capped by the token user's role
 when created and by that user's current role on each authenticated request.
+The current auth surface is token-only; local password login and TOTP are not
+accepted by user commands or the user API.
 
 ## Keys
 

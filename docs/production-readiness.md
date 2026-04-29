@@ -119,6 +119,9 @@ run.
   scoped bearer tokens, role-capped token creation, current-role enforcement on
   every bearer-token request, token lifecycle operations, request IDs, security
   headers, and mutation audit events.
+- Local password authentication and TOTP are not part of the implemented auth
+  surface. User records reject `totp_enforced=true` until a password/TOTP login
+  flow exists.
 - Optional state DB encryption for sensitive target/storage option values via
   `server.master_passphrase`.
 - Direct control-plane TLS with optional client-certificate verification through

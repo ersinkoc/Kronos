@@ -1617,6 +1617,7 @@ components:
           enum: [admin, operator, viewer]
         totp_enforced:
           type: boolean
+          description: Reserved for future local password authentication; true values are rejected in the current token-only auth model.
         created_at:
           type: string
           format: date-time
