@@ -20,7 +20,7 @@ if [ -z "$identity_regexp" ]; then
 	if [ -n "${GITHUB_REPOSITORY:-}" ]; then
 		identity_regexp="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@.*"
 	else
-		identity_regexp="https://github.com/.+/.github/workflows/release.yml@.*"
+		identity_regexp="https://github.com/ersinkoc/Kronos/.github/workflows/release.yml@.*"
 	fi
 fi
 
