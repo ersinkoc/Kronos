@@ -1374,6 +1374,47 @@ func TestServerTokenCreateRejectsScopesOutsideUserRole(t *testing.T) {
 	}
 }
 
+func TestServerBearerTokenRequiresCurrentUserRole(t *testing.T) {
+	t.Parallel()
+
+	db, err := kvstore.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+	stores, err := newAPIStores(db)
+	if err != nil {
+		t.Fatalf("newAPIStores() error = %v", err)
+	}
+	if err := stores.users.Save(core.User{ID: "user-1", Email: "admin@example.com", DisplayName: "Admin", Role: core.RoleAdmin}); err != nil {
+		t.Fatalf("Save(admin) error = %v", err)
+	}
+	created, err := stores.tokens.Create("admin-token", "user-1", []string{"backup:write"}, time.Time{})
+	if err != nil {
+		t.Fatalf("Create(token) error = %v", err)
+	}
+	if _, err := stores.users.Grant("user-1", core.RoleViewer, time.Now().UTC()); err != nil {
+		t.Fatalf("Grant(viewer) error = %v", err)
+	}
+	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, stores))
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/api/v1/backups/now", strings.NewReader(`{"target_id":"target-1","storage_id":"storage-1","type":"full"}`))
+	if err != nil {
+		t.Fatalf("NewRequest(backup now) error = %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+created.Secret)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("POST backup now error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("POST backup now status = %d, want 403", resp.StatusCode)
+	}
+}
+
 func TestServerBearerTokenScopeEnforcement(t *testing.T) {
 	t.Parallel()
 
@@ -1391,6 +1432,9 @@ func TestServerBearerTokenScopeEnforcement(t *testing.T) {
 		Type: core.BackupTypeFull, ManifestID: "manifest-1", StartedAt: time.Now().UTC(), EndedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("Save(backup) error = %v", err)
+	}
+	if err := stores.users.Save(core.User{ID: "user-1", Email: "admin@example.com", DisplayName: "Admin", Role: core.RoleAdmin}); err != nil {
+		t.Fatalf("Save(user) error = %v", err)
 	}
 	readToken, err := stores.tokens.Create("reader", "user-1", []string{"backup:read"}, time.Time{})
 	if err != nil {
@@ -1511,6 +1555,12 @@ func TestServerSecretResourceReadsRequireAgentScope(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Save(target) error = %v", err)
 	}
+	if err := stores.users.Save(core.User{ID: "user-1", Email: "viewer@example.com", DisplayName: "Viewer", Role: core.RoleViewer}); err != nil {
+		t.Fatalf("Save(viewer user) error = %v", err)
+	}
+	if err := stores.users.Save(core.User{ID: "agent-1", Email: "agent@example.com", DisplayName: "Agent", Role: core.RoleAdmin}); err != nil {
+		t.Fatalf("Save(agent user) error = %v", err)
+	}
 	readToken, err := stores.tokens.Create("reader", "user-1", []string{"target:read"}, time.Time{})
 	if err != nil {
 		t.Fatalf("Create(read token) error = %v", err)
@@ -1566,6 +1616,9 @@ func TestServerBearerTokenActorFeedsAudit(t *testing.T) {
 	stores, err := newAPIStores(db)
 	if err != nil {
 		t.Fatalf("newAPIStores() error = %v", err)
+	}
+	if err := stores.users.Save(core.User{ID: "user-actor", Email: "actor@example.com", DisplayName: "Actor", Role: core.RoleAdmin}); err != nil {
+		t.Fatalf("Save(actor user) error = %v", err)
 	}
 	token, err := stores.tokens.Create("target-writer", "user-actor", []string{"target:write"}, time.Time{})
 	if err != nil {

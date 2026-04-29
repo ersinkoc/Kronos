@@ -210,6 +210,22 @@ func (s *TokenStore) Verify(secret string) (core.Token, bool, error) {
 	return record.Token, true, nil
 }
 
+// UserAllowsScope checks the token owner's current role against a required scope.
+func (s *TokenStore) UserAllowsScope(userID core.ID, required string) (bool, bool, error) {
+	if s == nil || s.db == nil {
+		return false, false, fmt.Errorf("token store is closed")
+	}
+	if userID.IsZero() {
+		return false, false, nil
+	}
+	var user core.User
+	exists, err := getJSON(s.db, usersBucket, []byte(userID), &user)
+	if err != nil || !exists {
+		return exists, false, err
+	}
+	return true, RoleAllowsScope(user.Role, required), nil
+}
+
 func normalizeScopes(scopes []string) []string {
 	seen := make(map[string]struct{}, len(scopes))
 	out := make([]string, 0, len(scopes))
@@ -251,4 +267,64 @@ func parseTokenID(secret string) (core.ID, bool) {
 func hashTokenSecret(secret string) string {
 	sum := sha256.Sum256([]byte(secret))
 	return hex.EncodeToString(sum[:])
+}
+
+// RoleAllowsScope reports whether a built-in role grants required.
+func RoleAllowsScope(role core.RoleName, required string) bool {
+	switch role {
+	case core.RoleAdmin:
+		return scopeSetAllows([]string{"admin:*"}, required)
+	case core.RoleOperator:
+		return scopeSetAllows([]string{
+			"agent:read",
+			"audit:read",
+			"backup:*",
+			"job:*",
+			"metrics:read",
+			"notification:*",
+			"restore:*",
+			"retention:*",
+			"schedule:read",
+			"storage:read",
+			"target:read",
+		}, required)
+	case core.RoleViewer:
+		return scopeSetAllows([]string{
+			"agent:read",
+			"audit:read",
+			"backup:read",
+			"job:read",
+			"metrics:read",
+			"notification:read",
+			"restore:read",
+			"retention:read",
+			"schedule:read",
+			"storage:read",
+			"target:read",
+		}, required)
+	default:
+		return false
+	}
+}
+
+func scopeSetAllows(scopes []string, required string) bool {
+	if required == "" {
+		return true
+	}
+	for _, scope := range scopes {
+		scope = strings.TrimSpace(scope)
+		if scope == "" {
+			continue
+		}
+		if scope == "*" || scope == "admin:*" || scope == required {
+			return true
+		}
+		if strings.HasSuffix(scope, ":*") {
+			prefix := strings.TrimSuffix(scope, "*")
+			if strings.HasPrefix(required, prefix) {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -34,7 +34,8 @@ Kronos has a strong core: CLI, HTTP control plane, agent worker, persistent KV s
 ### Security, error handling, edge cases
 
 - [x] Add first-admin bootstrap for empty user/token stores, with optional bootstrap-token protection for non-local deployments.
-- [ ] Add password hashing and role enforcement beyond token scopes.
+- [ ] Add password hashing for any future password-auth flow; current token-only auth has no password login surface.
+- [x] Enforce current user role on every bearer-token request, not only when a token is created.
 - [ ] Add TOTP for admin or remove that claim from MVP docs.
 - [x] Add TLS/mTLS deployment path and secure agent enrollment; completed 2026-04-29 with `server.tls` listener config and agent `--tls-ca`/`--tls-cert`/`--tls-key` support.
 - [x] Add encrypted-at-rest state records for sensitive target/storage options when `server.master_passphrase` is configured.

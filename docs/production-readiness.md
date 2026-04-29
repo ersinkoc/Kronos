@@ -116,8 +116,9 @@ run.
   metadata pruning.
 - First-admin bootstrap for empty user/token stores, optional
   `server.auth.bootstrap_token` protection for the one-time bootstrap endpoint,
-  scoped bearer tokens, role-capped token creation, token lifecycle operations,
-  request IDs, security headers, and mutation audit events.
+  scoped bearer tokens, role-capped token creation, current-role enforcement on
+  every bearer-token request, token lifecycle operations, request IDs, security
+  headers, and mutation audit events.
 - Optional state DB encryption for sensitive target/storage option values via
   `server.master_passphrase`.
 - Direct control-plane TLS with optional client-certificate verification through

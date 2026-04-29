@@ -64,6 +64,51 @@ func TestTokenStoreCreateListVerifyRevoke(t *testing.T) {
 	}
 }
 
+func TestTokenStoreUserAllowsScopeUsesCurrentRole(t *testing.T) {
+	t.Parallel()
+
+	db, err := kvstore.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+	userStore, err := NewUserStore(db)
+	if err != nil {
+		t.Fatalf("NewUserStore() error = %v", err)
+	}
+	if err := userStore.Save(core.User{ID: "user-1", Email: "admin@example.com", DisplayName: "Admin", Role: core.RoleAdmin}); err != nil {
+		t.Fatalf("Save(admin) error = %v", err)
+	}
+	store, err := NewTokenStore(db, core.RealClock{})
+	if err != nil {
+		t.Fatalf("NewTokenStore() error = %v", err)
+	}
+	exists, allowed, err := store.UserAllowsScope("user-1", "backup:write")
+	if err != nil {
+		t.Fatalf("UserAllowsScope(admin) error = %v", err)
+	}
+	if !exists || !allowed {
+		t.Fatalf("UserAllowsScope(admin) exists=%v allowed=%v, want true true", exists, allowed)
+	}
+	if _, err := userStore.Grant("user-1", core.RoleViewer, time.Now().UTC()); err != nil {
+		t.Fatalf("Grant(viewer) error = %v", err)
+	}
+	exists, allowed, err = store.UserAllowsScope("user-1", "backup:write")
+	if err != nil {
+		t.Fatalf("UserAllowsScope(viewer) error = %v", err)
+	}
+	if !exists || allowed {
+		t.Fatalf("UserAllowsScope(viewer) exists=%v allowed=%v, want true false", exists, allowed)
+	}
+	exists, allowed, err = store.UserAllowsScope("missing", "backup:read")
+	if err != nil {
+		t.Fatalf("UserAllowsScope(missing) error = %v", err)
+	}
+	if exists || allowed {
+		t.Fatalf("UserAllowsScope(missing) exists=%v allowed=%v, want false false", exists, allowed)
+	}
+}
+
 func TestTokenStoreRejectsInvalidCreate(t *testing.T) {
 	t.Parallel()
 

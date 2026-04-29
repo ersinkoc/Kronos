@@ -206,7 +206,8 @@ After rotating credentials, preview and prune inactive token metadata:
 Common scope families are `backup`, `target`, `storage`, `schedule`, `job`,
 `retention`, `restore`, `audit`, `token`, `user`, `agent`, and `metrics`, each
 using `:read` or `:write` where applicable. `overview` uses `metrics:read`.
-Requested token scopes are capped by the token user's role.
+Requested token scopes are capped by the token user's role when the token is
+created and by the user's current role on every authenticated request.
 
 Agents can use the same bearer secret through `KRONOS_TOKEN` or
 `kronos agent --token <secret>` and advertise concurrency with

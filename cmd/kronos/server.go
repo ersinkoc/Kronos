@@ -2446,7 +2446,7 @@ func validateTokenUserScopes(users *control.UserStore, userID core.ID, scopes []
 }
 
 func roleAllowsScope(role core.RoleName, scope string) bool {
-	return tokenAllowsScope(core.Token{Scopes: roleScopes(role)}, scope)
+	return control.RoleAllowsScope(role, scope)
 }
 
 func roleScopes(role core.RoleName) []string {
@@ -2531,6 +2531,19 @@ func requireScope(w http.ResponseWriter, r *http.Request, store *control.TokenSt
 	}
 	if !tokenAllowsScope(token, scope) {
 		http.Error(w, "insufficient scope", http.StatusForbidden)
+		return false
+	}
+	userExists, roleAllowed, err := store.UserAllowsScope(token.UserID, scope)
+	if err != nil {
+		http.Error(w, "verify token user", http.StatusInternalServerError)
+		return false
+	}
+	if !userExists {
+		http.Error(w, "invalid bearer token", http.StatusUnauthorized)
+		return false
+	}
+	if !roleAllowed {
+		http.Error(w, "insufficient role", http.StatusForbidden)
 		return false
 	}
 	if r.Header.Get("X-Kronos-Actor") == "" && !token.UserID.IsZero() {

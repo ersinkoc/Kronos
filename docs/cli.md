@@ -171,8 +171,8 @@ kronos audit verify
 Common scope families are `backup`, `target`, `storage`, `schedule`, `job`,
 `notification`, `retention`, `restore`, `audit`, `token`, `user`, `agent`, and
 `metrics`, each using `:read` or `:write` where applicable. `overview` uses
-`metrics:read`. Requested token
-scopes are capped by the token user's role.
+`metrics:read`. Requested token scopes are capped by the token user's role
+when created and by that user's current role on each authenticated request.
 
 ## Keys
 
