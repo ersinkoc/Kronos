@@ -4052,6 +4052,23 @@ func TestServerRejectsBadRequestsAndMethods(t *testing.T) {
 				_, _ = body.ReadFrom(resp.Body)
 				t.Fatalf("status = %d, want %d, body=%q", resp.StatusCode, tc.status, body.String())
 			}
+			if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+				t.Fatalf("Content-Type = %q, want application/json", contentType)
+			}
+			var body struct {
+				Error struct {
+					Code      string `json:"code"`
+					Message   string `json:"message"`
+					Status    int    `json:"status"`
+					RequestID string `json:"request_id"`
+				} `json:"error"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("Decode(error response) error = %v", err)
+			}
+			if body.Error.Status != tc.status || body.Error.Code == "" || body.Error.Message == "" || body.Error.RequestID == "" {
+				t.Fatalf("error response = %#v, want populated envelope with status %d", body, tc.status)
+			}
 		})
 	}
 }

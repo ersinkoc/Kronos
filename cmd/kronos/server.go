@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -394,6 +395,129 @@ func withControlPlaneCacheHeaders(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func withJSONErrors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		recorder := newErrorResponseRecorder(w)
+		next.ServeHTTP(recorder, r)
+		recorder.flush(r)
+	})
+}
+
+type errorResponseRecorder struct {
+	w      http.ResponseWriter
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func newErrorResponseRecorder(w http.ResponseWriter) *errorResponseRecorder {
+	return &errorResponseRecorder{
+		w:      w,
+		header: cloneHeader(w.Header()),
+	}
+}
+
+func (r *errorResponseRecorder) Header() http.Header {
+	return r.header
+}
+
+func (r *errorResponseRecorder) WriteHeader(status int) {
+	if r.status == 0 {
+		r.status = status
+	}
+}
+
+func (r *errorResponseRecorder) Write(p []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	return r.body.Write(p)
+}
+
+func (r *errorResponseRecorder) flush(req *http.Request) {
+	status := r.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	dst := r.w.Header()
+	clearHeader(dst)
+	copyHeader(dst, r.header)
+	if status < http.StatusBadRequest || isJSONContentType(dst.Get("Content-Type")) {
+		r.w.WriteHeader(status)
+		_, _ = r.w.Write(r.body.Bytes())
+		return
+	}
+	message := strings.TrimSpace(r.body.String())
+	if message == "" {
+		message = http.StatusText(status)
+	}
+	dst.Set("Content-Type", "application/json")
+	dst.Del("Content-Length")
+	r.w.WriteHeader(status)
+	_ = json.NewEncoder(r.w).Encode(errorResponse{
+		Error: errorBody{
+			Code:      errorCodeForStatus(status),
+			Message:   message,
+			Status:    status,
+			RequestID: requestIDForError(req),
+		},
+	})
+}
+
+type errorResponse struct {
+	Error errorBody `json:"error"`
+}
+
+type errorBody struct {
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Status    int    `json:"status"`
+	RequestID string `json:"request_id,omitempty"`
+}
+
+func isJSONContentType(contentType string) bool {
+	mediaType, _, _ := strings.Cut(contentType, ";")
+	return strings.EqualFold(strings.TrimSpace(mediaType), "application/json")
+}
+
+func errorCodeForStatus(status int) string {
+	text := http.StatusText(status)
+	if text == "" {
+		return "error"
+	}
+	return strings.ToLower(strings.ReplaceAll(text, " ", "_"))
+}
+
+func requestIDForError(req *http.Request) string {
+	if req == nil {
+		return ""
+	}
+	if requestID, ok := obs.RequestIDFromContext(req.Context()); ok {
+		return requestID
+	}
+	return strings.TrimSpace(req.Header.Get(obs.RequestIDHeader))
+}
+
+func cloneHeader(header http.Header) http.Header {
+	out := make(http.Header, len(header))
+	copyHeader(out, header)
+	return out
+}
+
+func copyHeader(dst http.Header, src http.Header) {
+	for key, values := range src {
+		copied := make([]string, len(values))
+		copy(copied, values)
+		dst[key] = copied
+	}
+}
+
+func clearHeader(header http.Header) {
+	for key := range header {
+		delete(header, key)
+	}
 }
 
 func isControlPlanePath(path string) bool {
@@ -1277,7 +1401,7 @@ func newServerHandlerWithStoresAuth(cfg *config.Config, registry *control.AgentR
 		}
 	})
 	mux.Handle("/", webui.Handler())
-	return withSecurityHeaders(withControlPlaneCacheHeaders(withRequestID(withAuthPolicy(mux, insecureNoAuth))))
+	return withSecurityHeaders(withControlPlaneCacheHeaders(withRequestID(withJSONErrors(withAuthPolicy(mux, insecureNoAuth)))))
 }
 
 func applyStoreSecretProtection(stores apiStores, cfg *config.Config) error {

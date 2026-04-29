@@ -123,6 +123,8 @@ run.
 - Agent-side resolution for full-value target/storage secret placeholders,
   CLI `*-ref` helper flags for managed resource credentials, and API
   validation that rejects malformed target/storage placeholder syntax.
+- Consistent JSON error envelopes for REST failures, including machine-readable
+  status code, human-readable message, and request ID correlation.
 - Health, readiness, metrics, OpenAPI, operations docs, deployment topology
   docs, single-replica Kubernetes deployment examples, restore drill docs,
   release verification docs, release scripts, provenance metadata, SBOM

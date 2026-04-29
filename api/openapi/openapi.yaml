@@ -1232,6 +1232,26 @@ components:
             enum: [ok, error]
         error:
           type: string
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, status]
+          properties:
+            code:
+              type: string
+              description: Machine-readable HTTP status code name, such as bad_request.
+            message:
+              type: string
+              description: Human-readable error message.
+            status:
+              type: integer
+              description: HTTP status code.
+            request_id:
+              type: string
+              description: Correlation ID echoed in X-Kronos-Request-ID.
     OKResponse:
       type: object
       required: [ok]

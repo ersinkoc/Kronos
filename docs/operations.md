@@ -479,7 +479,12 @@ audit records:
 
 If `--request-id` is omitted, CLI and agent requests generate correlation IDs
 automatically. Failed CLI and agent control-plane requests include the response
-request ID in the error text when the server provides one.
+request ID in the error text when the server provides one. REST API failures use
+a consistent JSON envelope:
+
+```json
+{"error":{"code":"bad_request","message":"invalid target","status":400,"request_id":"req_..."}}
+```
 
 ## Disaster Recovery
 
