@@ -1,6 +1,6 @@
 # Project Status
 
-Last reviewed from the repository state on April 27, 2026.
+Last reviewed from the repository state on April 29, 2026.
 
 Kronos is currently a working Phase 1 / early Phase 2 backup platform rather
 than a bare scaffold. The core control plane, CLI, state store, scheduler,
@@ -20,6 +20,8 @@ flowchart LR
     Repo[(Backup repository)]
     Redis[(Redis target)]
     Postgres[(PostgreSQL target)]
+    MySQL[(MySQL/MariaDB target)]
+    Mongo[(MongoDB target)]
 
     CLI --> Server
     WebUI --> Server
@@ -27,6 +29,8 @@ flowchart LR
     Server --> Agent
     Agent --> Redis
     Agent --> Postgres
+    Agent --> MySQL
+    Agent --> Mongo
     Agent --> Repo
 ```
 
@@ -41,7 +45,13 @@ flowchart LR
 - Redis backup and restore driver coverage, including ACL and command-stream
   replay paths.
 - PostgreSQL logical driver MVP using `pg_dump` plain SQL output for full
-  backups and `psql` for restores.
+  backups and `psql` for restores, with PostgreSQL 15, 16, and 17 conformance
+  coverage plus focused restore rehearsal evidence.
+- MySQL/MariaDB logical driver MVP using `mysqldump`/`mysql` with real-service
+  MySQL 8.4 and MariaDB 11.4 conformance plus bidirectional restore rehearsal
+  coverage.
+- MongoDB logical driver MVP using `mongodump`/`mongorestore` archives with
+  authenticated MongoDB 7.0 conformance and a 10,000-document restore drill.
 - Persistent scheduler and queued/running/terminal job lifecycle.
 - Agent worker resource sync, heartbeat, job claim, backup execution, restore
   execution, and finish reporting.
@@ -52,6 +62,8 @@ flowchart LR
 - Token-based authorization with scoped bearer tokens, role-capped token
   creation, inactive token pruning, request IDs, and audit recording for
   mutations.
+- Direct control-plane TLS with optional client-certificate verification for
+  agent mTLS enrollment.
 - Baseline HTTP security headers for API and embedded WebUI responses.
 - Webhook notification rules for terminal job events, API management, optional
   HMAC payload signatures, bounded retries, and delivery metadata in the audit

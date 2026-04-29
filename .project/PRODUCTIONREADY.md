@@ -28,7 +28,7 @@ Specified feature completeness is roughly **55%**. Implemented-path completeness
 
 - ✅ **Working** — CLI dispatcher, HTTP control plane, local mode, agent polling worker, KV stores, local/S3 storage, chunk pipeline, manifests, retention policies, audit log, metrics, OpenAPI checks, embedded WebUI serving.
 - ⚠️ **Partial** — Redis backup/restore, PostgreSQL/MySQL/MongoDB logical backup/restore, restore planning, verification, notifications, WebUI, token scopes.
-- ❌ **Missing** — native PG/MySQL/Mongo protocols, PITR, gRPC, MCP, OIDC, TOTP, mTLS, hooks, SFTP/Azure/GCS/FTP/WebDAV, live sandbox verification.
+- ❌ **Missing** — native PG/MySQL/Mongo protocols, PITR, gRPC, MCP, OIDC, TOTP, hooks, SFTP/Azure/GCS/FTP/WebDAV, live sandbox verification.
 - ✅ **Fixed in Phase 1** — large logical records now restore through `json.Decoder` instead of `bufio.Scanner`, with a 128 KiB regression test.
 
 ### 1.2 Critical Path Analysis
@@ -67,7 +67,7 @@ KV has WAL/repair coverage and server restart recovery for active jobs. Agent cr
 - [ ] Password authentication is not implemented.
 - [ ] TOTP is not implemented.
 - [ ] OIDC is not implemented.
-- [ ] mTLS is not implemented.
+- [x] Direct control-plane TLS and optional client-certificate verification for agent mTLS enrollment are implemented.
 - [ ] CSRF protection is not relevant to bearer-only API, but WebUI token storage increases XSS risk.
 - [x] Token verify rate limiting exists.
 
@@ -81,7 +81,8 @@ KV has WAL/repair coverage and server restart recovery for active jobs. Agent cr
 
 ### 3.3 Network Security
 
-- [ ] TLS/HTTPS support is not enforced by the binary.
+- [x] TLS/HTTPS support is implemented for the control plane when `server.tls.cert` and `server.tls.key` are configured.
+- [ ] TLS/HTTPS is not enforced by the binary for every deployment.
 - [x] Security headers include CSP, frame denial, no-sniff, no-referrer, permissions policy.
 - [ ] HSTS is not set by the app.
 - [ ] CORS is not explicitly configured.
@@ -100,7 +101,7 @@ KV has WAL/repair coverage and server restart recovery for active jobs. Agent cr
 
 1. **High** — Unauthenticated local/no-token mode is unsafe if bound outside loopback. Mitigation: require explicit insecure dev mode and refuse public binds without auth.
 2. **Reduced** — Plaintext persisted target/storage option secrets can now be encrypted with `server.master_passphrase`, and agents can resolve full-value option placeholders at execution time. Remaining risk: deployments must configure and back up the passphrase, and first-class secret-reference validation is still missing.
-3. **Reduced** — PostgreSQL/MongoDB command-argument password exposure was fixed on 2026-04-29. Remaining risk is host-level exposure through environment variables and temporary config files until native drivers or stronger secret management land.
+3. **Reduced** — PostgreSQL, MySQL/MariaDB, and MongoDB command-argument password exposure was fixed on 2026-04-29. Remaining risk is host-level exposure through environment variables and temporary config files until native drivers or stronger secret management land.
 4. **Medium** — WebUI token in localStorage. Mitigation: short-lived tokens, CSP hardening, possible memory-only storage or secure cookie design.
 
 ## 4. Performance Assessment
