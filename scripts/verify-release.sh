@@ -20,20 +20,20 @@ for artifact in "$dir"/kronos-*; do
 		echo "missing checksum for $artifact" >&2
 		exit 1
 	fi
+	expected="$(awk '{print $1}' "$checksum")"
 	if command -v sha256sum >/dev/null 2>&1; then
-		sha256sum -c "$checksum"
+		actual="$(sha256sum "$artifact" | awk '{print $1}')"
 	elif command -v shasum >/dev/null 2>&1; then
-		expected="$(awk '{print $1}' "$checksum")"
 		actual="$(shasum -a 256 "$artifact" | awk '{print $1}')"
-		if [ "$expected" != "$actual" ]; then
-			echo "checksum mismatch for $artifact" >&2
-			exit 1
-		fi
-		echo "$artifact: OK"
 	else
 		echo "sha256sum or shasum is required to verify release artifacts" >&2
 		exit 1
 	fi
+	if [ "$expected" != "$actual" ]; then
+		echo "checksum mismatch for $artifact" >&2
+		exit 1
+	fi
+	echo "$artifact: OK"
 done
 
 if [ "$found_binary" -eq 0 ]; then
