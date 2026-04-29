@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 
 	kcompress "github.com/kronos/kronos/internal/compress"
@@ -191,6 +192,55 @@ func TestPipelineRestoreVerifiesHash(t *testing.T) {
 	}
 }
 
+func TestPipelineRestoreRejectsMissingChunkObject(t *testing.T) {
+	t.Parallel()
+
+	backend := storagetest.NewMemoryBackend("memory")
+	pipeline := testRestorePipeline(t, backend)
+	refs, _, err := pipeline.Feed(context.Background(), bytes.NewReader([]byte("missing object drill")))
+	if err != nil {
+		t.Fatalf("Feed() error = %v", err)
+	}
+	if err := backend.Delete(context.Background(), refs[0].Key); err != nil {
+		t.Fatalf("Delete(chunk) error = %v", err)
+	}
+
+	var got bytes.Buffer
+	_, err = pipeline.Restore(context.Background(), refs, &got)
+	if err == nil {
+		t.Fatal("Restore() error = nil, want missing chunk object")
+	}
+	if !strings.Contains(err.Error(), "get chunk") || !strings.Contains(err.Error(), refs[0].Key) {
+		t.Fatalf("Restore() error = %q, want missing chunk key", err)
+	}
+}
+
+func TestPipelineRestoreRejectsCorruptChunkObject(t *testing.T) {
+	t.Parallel()
+
+	backend := storagetest.NewMemoryBackend("memory")
+	pipeline := testRestorePipeline(t, backend)
+	refs, _, err := pipeline.Feed(context.Background(), bytes.NewReader([]byte("corrupt object drill")))
+	if err != nil {
+		t.Fatalf("Feed() error = %v", err)
+	}
+	if err := backend.Delete(context.Background(), refs[0].Key); err != nil {
+		t.Fatalf("Delete(chunk) error = %v", err)
+	}
+	if _, err := backend.Put(context.Background(), refs[0].Key, bytes.NewReader([]byte("not a valid envelope")), int64(len("not a valid envelope"))); err != nil {
+		t.Fatalf("Put(corrupt chunk) error = %v", err)
+	}
+
+	var got bytes.Buffer
+	_, err = pipeline.Restore(context.Background(), refs, &got)
+	if err == nil {
+		t.Fatal("Restore() error = nil, want corrupt chunk object")
+	}
+	if !strings.Contains(err.Error(), "decrypt chunk") {
+		t.Fatalf("Restore() error = %q, want decrypt failure", err)
+	}
+}
+
 func TestPipelineDedupsWithinRunWithoutIndex(t *testing.T) {
 	t.Parallel()
 
@@ -293,6 +343,22 @@ func mustCompressor(t *testing.T, algorithm kcompress.Algorithm) kcompress.Compr
 		t.Fatalf("compress.New() error = %v", err)
 	}
 	return compressor
+}
+
+func testRestorePipeline(t *testing.T, backend *storagetest.MemoryBackend) *Pipeline {
+	t.Helper()
+	cipher, err := kcrypto.NewAES256GCM(bytes.Repeat([]byte{6}, 32))
+	if err != nil {
+		t.Fatalf("NewAES256GCM() error = %v", err)
+	}
+	return &Pipeline{
+		Chunker:     mustChunker(t, 4, 8, 16),
+		Compressor:  mustCompressor(t, kcompress.AlgorithmNone),
+		Cipher:      cipher,
+		KeyID:       "test-key",
+		Backend:     backend,
+		Concurrency: 1,
+	}
 }
 
 func TestPipelineSizing(t *testing.T) {
