@@ -72,10 +72,17 @@ To archive the local checksum and signature verification logs plus artifact
 digests, run:
 
 ```bash
-./scripts/archive-release-evidence.sh bin release-evidence/<tag>
+KRONOS_RELEASE_TAG=<tag> ./scripts/archive-release-evidence.sh bin release-evidence/<tag>
 ```
 
 Set `GH_ATTESTATION_REPO=ersinkoc/Kronos` to include GitHub provenance and SBOM
 attestation verification output in the same evidence directory.
+
+To rehearse the full consumer-side verification path from GitHub release assets,
+run:
+
+```bash
+./scripts/release-rehearsal.sh <tag> release-evidence/<tag>
+```
 
 Do not promote a release if any checksum, signature, or attestation check fails.

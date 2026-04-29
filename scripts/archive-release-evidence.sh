@@ -5,6 +5,7 @@ release_dir="${1:-bin}"
 evidence_dir="${2:-release-evidence}"
 repo="${GH_ATTESTATION_REPO:-}"
 workflow="${GH_ATTESTATION_WORKFLOW:-.github/workflows/release.yml}"
+release_tag="${KRONOS_RELEASE_TAG:-unknown}"
 
 if [ ! -d "$release_dir" ]; then
 	echo "release directory not found: $release_dir" >&2
@@ -74,6 +75,7 @@ fi
 
 summary="$evidence_dir/summary.txt"
 {
+	echo "release_tag=$release_tag"
 	echo "release_dir=$release_dir"
 	echo "evidence_dir=$evidence_dir"
 	echo "git_commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"

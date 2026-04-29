@@ -168,6 +168,7 @@ func TestReleaseVerificationDocumentsSupplyChainChecks(t *testing.T) {
 	for _, want := range []string{
 		"./scripts/verify-release.sh",
 		"./scripts/verify-signatures.sh",
+		"./scripts/release-rehearsal.sh",
 		"gh attestation verify",
 		"--signer-workflow .github/workflows/release.yml",
 		"Do not promote a release",

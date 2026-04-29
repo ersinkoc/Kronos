@@ -1,4 +1,4 @@
-.PHONY: help build test lint fmt vet vuln bench integration e2e ui release release-all provenance sbom sign-release verify-signatures verify-release archive-release-evidence smoke-release production-check clean check
+.PHONY: help build test lint fmt vet vuln bench integration e2e ui release release-all provenance sbom sign-release verify-signatures verify-release archive-release-evidence release-rehearsal smoke-release production-check clean check
 
 BIN := bin/kronos
 GO ?= go
@@ -33,6 +33,7 @@ help:
 		'  verify-signatures Verify cosign keyless release signatures' \
 		'  verify-release Verify release binaries, checksums, and metadata' \
 		'  archive-release-evidence Archive checksum/signature/attestation verification logs' \
+		'  release-rehearsal Download a tagged release and archive verification evidence' \
 		'  smoke-release Execute the host release artifact and completion output' \
 		'  production-check Run the release-readiness gate without requiring make recursion' \
 		'  clean        Remove generated artifacts' \
@@ -93,6 +94,10 @@ verify-release:
 archive-release-evidence:
 	./scripts/archive-release-evidence.sh bin release-evidence
 
+release-rehearsal:
+	@if [ -z "$(TAG)" ]; then echo 'TAG is required, for example: make release-rehearsal TAG=v0.1.0'; exit 2; fi
+	./scripts/release-rehearsal.sh "$(TAG)" "release-evidence/$(TAG)"
+
 smoke-release:
 	GO=$(GO) ./scripts/smoke-release.sh bin
 
@@ -119,6 +124,7 @@ check:
 	sh -n scripts/release.sh
 	sh -n scripts/provenance.sh
 	sh -n scripts/archive-release-evidence.sh
+	sh -n scripts/release-rehearsal.sh
 	sh -n scripts/sign-release.sh
 	sh -n scripts/sbom.sh
 	sh -n scripts/verify-signatures.sh

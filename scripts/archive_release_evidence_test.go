@@ -53,6 +53,7 @@ func TestArchiveReleaseEvidenceCapturesVerificationLogs(t *testing.T) {
 	cmd.Dir = root
 	cmd.Env = append(cleanEnv(os.Environ(), "GH_ATTESTATION_REPO", "GITHUB_REPOSITORY", "COSIGN_CERTIFICATE_IDENTITY_REGEXP"),
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"KRONOS_RELEASE_TAG=v0.0.0-test",
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -75,6 +76,7 @@ func TestArchiveReleaseEvidenceCapturesVerificationLogs(t *testing.T) {
 	}
 	if !strings.Contains(string(summary), "checksum_log=checksum.log") ||
 		!strings.Contains(string(summary), "signature_log=signatures.log") ||
+		!strings.Contains(string(summary), "release_tag=v0.0.0-test") ||
 		!strings.Contains(string(summary), "attestation_log=attestations.log") {
 		t.Fatalf("summary missing expected log references:\n%s", summary)
 	}
