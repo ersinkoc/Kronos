@@ -318,3 +318,93 @@ func TestResourceStoresValidateRequiredFields(t *testing.T) {
 		t.Fatal("Save(empty backup) error = nil, want error")
 	}
 }
+
+func TestResourceStoresValidateResourceShape(t *testing.T) {
+	t.Parallel()
+
+	db, err := kvstore.Open(t.TempDir() + "/state.db")
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+	targets, err := NewTargetStore(db)
+	if err != nil {
+		t.Fatalf("NewTargetStore() error = %v", err)
+	}
+	storages, err := NewStorageStore(db)
+	if err != nil {
+		t.Fatalf("NewStorageStore() error = %v", err)
+	}
+	schedules, err := NewScheduleStore(db)
+	if err != nil {
+		t.Fatalf("NewScheduleStore() error = %v", err)
+	}
+	policies, err := NewRetentionPolicyStore(db)
+	if err != nil {
+		t.Fatalf("NewRetentionPolicyStore() error = %v", err)
+	}
+
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "target id whitespace",
+			err:  targets.Save(core.Target{ID: "bad id", Name: "redis", Driver: core.TargetDriverRedis, Endpoint: "127.0.0.1:6379"}),
+			want: "invalid character",
+		},
+		{
+			name: "target unsupported driver",
+			err:  targets.Save(core.Target{ID: "target-1", Name: "oracle", Driver: "oracle", Endpoint: "127.0.0.1:1521"}),
+			want: "target driver",
+		},
+		{
+			name: "target unsupported option",
+			err:  targets.Save(core.Target{ID: "target-2", Name: "redis", Driver: core.TargetDriverRedis, Endpoint: "127.0.0.1:6379", Options: map[string]any{"unknown": "value"}}),
+			want: "option",
+		},
+		{
+			name: "target non-scalar option",
+			err:  targets.Save(core.Target{ID: "target-3", Name: "redis", Driver: core.TargetDriverRedis, Endpoint: "127.0.0.1:6379", Options: map[string]any{"tls": []string{"disable"}}}),
+			want: "scalar",
+		},
+		{
+			name: "storage mismatched scheme",
+			err:  storages.Save(core.Storage{ID: "storage-1", Name: "bad", Kind: core.StorageKindS3, URI: "file:///repo"}),
+			want: "s3 scheme",
+		},
+		{
+			name: "storage missing bucket",
+			err:  storages.Save(core.Storage{ID: "storage-2", Name: "bad", Kind: core.StorageKindS3, URI: "s3://"}),
+			want: "bucket",
+		},
+		{
+			name: "storage unsupported option",
+			err:  storages.Save(core.Storage{ID: "storage-3", Name: "bad", Kind: core.StorageKindLocal, URI: "file:///repo", Options: map[string]any{"mode": "0640"}}),
+			want: "option",
+		},
+		{
+			name: "schedule invalid backup type",
+			err:  schedules.Save(core.Schedule{ID: "schedule-1", Name: "bad", TargetID: "target-1", StorageID: "storage-1", BackupType: "copy", Expression: "0 2 * * *"}),
+			want: "backup type",
+		},
+		{
+			name: "schedule invalid target id",
+			err:  schedules.Save(core.Schedule{ID: "schedule-2", Name: "bad", TargetID: "target 1", StorageID: "storage-1", BackupType: core.BackupTypeFull, Expression: "0 2 * * *"}),
+			want: "invalid character",
+		},
+		{
+			name: "retention unsupported rule",
+			err:  policies.Save(core.RetentionPolicy{ID: "policy-1", Name: "bad", Rules: []core.RetentionRule{{Kind: "forever"}}}),
+			want: "not supported",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.err == nil || !strings.Contains(tc.err.Error(), tc.want) {
+				t.Fatalf("error = %v, want containing %q", tc.err, tc.want)
+			}
+		})
+	}
+}

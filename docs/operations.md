@@ -203,6 +203,13 @@ must exist on the agent host. Prefer CLI helper flags such as `--password-ref`,
 `--credentials-ref` for managed resources; the API rejects malformed
 target/storage placeholder syntax during create and update.
 
+Resource create/update paths also validate stored shape before persistence:
+target drivers, storage kind and URI scheme compatibility, schedule backup
+types, cron or `@between` expressions, retention rule kinds, and known
+target/storage option keys. Target, storage, schedule, backup, user, and policy
+IDs may use letters, digits, `-`, `_`, `.`, `:`, and `/`; whitespace and
+control characters are rejected.
+
 ## Alert Rule Examples
 
 Use these Prometheus rules as a starting point and tune thresholds to match your

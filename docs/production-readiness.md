@@ -125,6 +125,9 @@ run.
   validation that rejects malformed target/storage placeholder syntax.
 - Consistent JSON error envelopes for REST failures, including machine-readable
   status code, human-readable message, and request ID correlation.
+- Store-level resource validation for ID shape, target driver enums, storage
+  kind/URI scheme compatibility, schedule backup types, cron/window
+  expressions, retention rule kinds, and scalar target/storage option schemas.
 - Health, readiness, metrics, OpenAPI, operations docs, deployment topology
   docs, single-replica Kubernetes deployment examples, restore drill docs,
   release verification docs, release scripts, provenance metadata, SBOM

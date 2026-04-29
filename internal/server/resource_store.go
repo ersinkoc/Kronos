@@ -3,7 +3,9 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/kronos/kronos/internal/core"
@@ -433,14 +435,26 @@ func validateTarget(target core.Target) error {
 	if target.ID.IsZero() {
 		return fmt.Errorf("target id is required")
 	}
+	if err := validateResourceID("target id", target.ID); err != nil {
+		return err
+	}
 	if target.Name == "" {
 		return fmt.Errorf("target name is required")
 	}
 	if target.Driver == "" {
 		return fmt.Errorf("target driver is required")
 	}
+	if !validTargetDriver(target.Driver) {
+		return fmt.Errorf("target driver %q is not supported", target.Driver)
+	}
 	if target.Endpoint == "" {
 		return fmt.Errorf("target endpoint is required")
+	}
+	if hasControlChars(target.Endpoint) {
+		return fmt.Errorf("target endpoint contains control characters")
+	}
+	if err := validateOptions("target", target.Options, targetOptionKeys); err != nil {
+		return err
 	}
 	return nil
 }
@@ -449,14 +463,26 @@ func validateStorage(storage core.Storage) error {
 	if storage.ID.IsZero() {
 		return fmt.Errorf("storage id is required")
 	}
+	if err := validateResourceID("storage id", storage.ID); err != nil {
+		return err
+	}
 	if storage.Name == "" {
 		return fmt.Errorf("storage name is required")
 	}
 	if storage.Kind == "" {
 		return fmt.Errorf("storage kind is required")
 	}
+	if !validStorageKind(storage.Kind) {
+		return fmt.Errorf("storage kind %q is not supported", storage.Kind)
+	}
 	if storage.URI == "" {
 		return fmt.Errorf("storage uri is required")
+	}
+	if err := validateStorageURI(storage.Kind, storage.URI); err != nil {
+		return err
+	}
+	if err := validateOptions("storage", storage.Options, storageOptionKeys); err != nil {
+		return err
 	}
 	return nil
 }
@@ -465,17 +491,29 @@ func validateSchedule(schedule core.Schedule) error {
 	if schedule.ID.IsZero() {
 		return fmt.Errorf("schedule id is required")
 	}
+	if err := validateResourceID("schedule id", schedule.ID); err != nil {
+		return err
+	}
 	if schedule.Name == "" {
 		return fmt.Errorf("schedule name is required")
 	}
 	if schedule.TargetID.IsZero() {
 		return fmt.Errorf("schedule target id is required")
 	}
+	if err := validateResourceID("schedule target id", schedule.TargetID); err != nil {
+		return err
+	}
 	if schedule.StorageID.IsZero() {
 		return fmt.Errorf("schedule storage id is required")
 	}
+	if err := validateResourceID("schedule storage id", schedule.StorageID); err != nil {
+		return err
+	}
 	if schedule.BackupType == "" {
 		return fmt.Errorf("schedule backup type is required")
+	}
+	if !validBackupType(schedule.BackupType) {
+		return fmt.Errorf("schedule backup type %q is not supported", schedule.BackupType)
 	}
 	if schedule.Expression == "" {
 		return fmt.Errorf("schedule expression is required")
@@ -492,20 +530,38 @@ func validateBackup(backup core.Backup) error {
 	if backup.ID.IsZero() {
 		return fmt.Errorf("backup id is required")
 	}
+	if err := validateResourceID("backup id", backup.ID); err != nil {
+		return err
+	}
 	if backup.TargetID.IsZero() {
 		return fmt.Errorf("backup target id is required")
+	}
+	if err := validateResourceID("backup target id", backup.TargetID); err != nil {
+		return err
 	}
 	if backup.StorageID.IsZero() {
 		return fmt.Errorf("backup storage id is required")
 	}
+	if err := validateResourceID("backup storage id", backup.StorageID); err != nil {
+		return err
+	}
 	if backup.JobID.IsZero() {
 		return fmt.Errorf("backup job id is required")
+	}
+	if err := validateResourceID("backup job id", backup.JobID); err != nil {
+		return err
 	}
 	if backup.Type == "" {
 		return fmt.Errorf("backup type is required")
 	}
+	if !validBackupType(backup.Type) {
+		return fmt.Errorf("backup type %q is not supported", backup.Type)
+	}
 	if backup.ManifestID.IsZero() {
 		return fmt.Errorf("backup manifest id is required")
+	}
+	if err := validateResourceID("backup manifest id", backup.ManifestID); err != nil {
+		return err
 	}
 	if backup.EndedAt.IsZero() {
 		return fmt.Errorf("backup ended_at is required")
@@ -516,6 +572,9 @@ func validateBackup(backup core.Backup) error {
 func validateUser(user core.User) error {
 	if user.ID.IsZero() {
 		return fmt.Errorf("user id is required")
+	}
+	if err := validateResourceID("user id", user.ID); err != nil {
+		return err
 	}
 	if user.Email == "" {
 		return fmt.Errorf("user email is required")
@@ -533,6 +592,9 @@ func validateRetentionPolicy(policy core.RetentionPolicy) error {
 	if policy.ID.IsZero() {
 		return fmt.Errorf("retention policy id is required")
 	}
+	if err := validateResourceID("retention policy id", policy.ID); err != nil {
+		return err
+	}
 	if policy.Name == "" {
 		return fmt.Errorf("retention policy name is required")
 	}
@@ -543,8 +605,172 @@ func validateRetentionPolicy(policy core.RetentionPolicy) error {
 		if rule.Kind == "" {
 			return fmt.Errorf("retention policy rule %d kind is required", i)
 		}
+		if !validRetentionRuleKind(rule.Kind) {
+			return fmt.Errorf("retention policy rule %d kind %q is not supported", i, rule.Kind)
+		}
+		if err := validateOptionValues(fmt.Sprintf("retention policy rule %d", i), rule.Params); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func validateResourceID(label string, id core.ID) error {
+	value := strings.TrimSpace(id.String())
+	if value == "" {
+		return fmt.Errorf("%s is required", label)
+	}
+	if value != id.String() {
+		return fmt.Errorf("%s must not contain leading or trailing whitespace", label)
+	}
+	if len(value) > 128 {
+		return fmt.Errorf("%s must be at most 128 characters", label)
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			continue
+		}
+		switch r {
+		case '-', '_', '.', ':', '/':
+			continue
+		default:
+			return fmt.Errorf("%s contains invalid character %q", label, r)
+		}
+	}
+	return nil
+}
+
+func validTargetDriver(driver core.TargetDriver) bool {
+	switch driver {
+	case core.TargetDriverPostgres, core.TargetDriverMySQL, core.TargetDriverMongoDB, core.TargetDriverRedis:
+		return true
+	default:
+		return false
+	}
+}
+
+func validStorageKind(kind core.StorageKind) bool {
+	switch kind {
+	case core.StorageKindLocal, core.StorageKindS3, core.StorageKindSFTP, core.StorageKindAzure, core.StorageKindGCS:
+		return true
+	default:
+		return false
+	}
+}
+
+func validBackupType(backupType core.BackupType) bool {
+	switch backupType {
+	case core.BackupTypeFull, core.BackupTypeIncremental, core.BackupTypeDifferential, core.BackupTypeStream, core.BackupTypeSchema:
+		return true
+	default:
+		return false
+	}
+}
+
+func validRetentionRuleKind(kind string) bool {
+	switch strings.TrimSpace(kind) {
+	case "count", "time", "size", "gfs":
+		return true
+	default:
+		return false
+	}
+}
+
+func validateStorageURI(kind core.StorageKind, raw string) error {
+	if hasControlChars(raw) {
+		return fmt.Errorf("storage uri contains control characters")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("storage uri: %w", err)
+	}
+	switch kind {
+	case core.StorageKindLocal:
+		if parsed.Scheme == "" {
+			return nil
+		}
+		if parsed.Scheme != "file" {
+			return fmt.Errorf("local storage uri must use file scheme")
+		}
+		if parsed.Host != "" {
+			return fmt.Errorf("local storage uri must not include a host")
+		}
+		if parsed.Path == "" {
+			return fmt.Errorf("local storage uri path is required")
+		}
+	case core.StorageKindS3:
+		if parsed.Scheme != "s3" {
+			return fmt.Errorf("s3 storage uri must use s3 scheme")
+		}
+		if parsed.Host == "" {
+			return fmt.Errorf("s3 storage uri bucket is required")
+		}
+	case core.StorageKindSFTP:
+		if parsed.Scheme != "sftp" {
+			return fmt.Errorf("sftp storage uri must use sftp scheme")
+		}
+		if parsed.Host == "" {
+			return fmt.Errorf("sftp storage uri host is required")
+		}
+	case core.StorageKindAzure:
+		if parsed.Scheme != "azure" {
+			return fmt.Errorf("azure storage uri must use azure scheme")
+		}
+		if parsed.Host == "" {
+			return fmt.Errorf("azure storage uri container is required")
+		}
+	case core.StorageKindGCS:
+		if parsed.Scheme != "gcs" && parsed.Scheme != "gs" {
+			return fmt.Errorf("gcs storage uri must use gcs or gs scheme")
+		}
+		if parsed.Host == "" {
+			return fmt.Errorf("gcs storage uri bucket is required")
+		}
+	}
+	return nil
+}
+
+var targetOptionKeys = map[string]struct{}{
+	"authSource": {}, "auth_source": {}, "connection_test_collection": {}, "database": {}, "dsn": {},
+	"dump_set_gtid_purged": {}, "globals": {}, "host": {}, "includeGlobals": {}, "include_globals": {},
+	"password": {}, "port": {}, "set_gtid_purged": {}, "ssl": {}, "sslmode": {}, "tls": {}, "uri": {},
+	"user": {}, "username": {},
+}
+
+var storageOptionKeys = map[string]struct{}{
+	"accessKey": {}, "access_key": {}, "aws_access_key_id": {}, "aws_secret_access_key": {},
+	"aws_session_token": {}, "credentials": {}, "credentials_provider": {}, "endpoint": {},
+	"force_path_style": {}, "imds_endpoint": {}, "region": {}, "secretKey": {}, "secret_key": {},
+	"sessionToken": {}, "session_token": {},
+}
+
+func validateOptions(label string, options map[string]any, allowed map[string]struct{}) error {
+	for key := range options {
+		if _, ok := allowed[key]; !ok {
+			return fmt.Errorf("%s option %q is not supported", label, key)
+		}
+	}
+	return validateOptionValues(label+" option", options)
+}
+
+func validateOptionValues(label string, options map[string]any) error {
+	for key, value := range options {
+		switch value.(type) {
+		case nil, string, bool, int, int64, float64, json.Number:
+		default:
+			return fmt.Errorf("%s %q must be a scalar value", label, key)
+		}
+	}
+	return nil
+}
+
+func hasControlChars(value string) bool {
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 func validRole(role core.RoleName) bool {
