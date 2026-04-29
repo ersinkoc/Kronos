@@ -220,7 +220,7 @@ func TestCIWorkflowMountsMongoTempConfigIntoContainerizedClients(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(ci.yml) error = %v", err)
 	}
-	const want = `--network host --volume /tmp:/tmp "${MONGODB_IMAGE:?}"`
+	const want = `--network host --user "$(id -u):$(id -g)" --volume /tmp:/tmp "${MONGODB_IMAGE:?}"`
 	if got := strings.Count(string(data), want); got != 2 {
 		t.Fatalf("MongoDB client wrappers with temp config mount = %d, want 2", got)
 	}

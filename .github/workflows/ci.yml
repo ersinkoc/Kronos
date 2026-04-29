@@ -459,7 +459,7 @@ jobs:
           #!/usr/bin/env sh
           set -eu
           command_name="$(basename "$0")"
-          exec docker run -i --rm --network host --volume /tmp:/tmp "${MONGODB_IMAGE:?}" "$command_name" "$@"
+          exec docker run -i --rm --network host --user "$(id -u):$(id -g)" --volume /tmp:/tmp "${MONGODB_IMAGE:?}" "$command_name" "$@"
           SH
             chmod +x ".tools/mongodb-client/${command}"
           done
@@ -522,7 +522,7 @@ jobs:
           #!/usr/bin/env sh
           set -eu
           command_name="$(basename "$0")"
-          exec docker run -i --rm --network host --volume /tmp:/tmp "${MONGODB_IMAGE:?}" "$command_name" "$@"
+          exec docker run -i --rm --network host --user "$(id -u):$(id -g)" --volume /tmp:/tmp "${MONGODB_IMAGE:?}" "$command_name" "$@"
           SH
             chmod +x ".tools/mongodb-client/${command}"
           done
