@@ -31,7 +31,7 @@ func TestRunStorageAddListRemove(t *testing.T) {
 					t.Fatalf("ReadFrom(request) error = %v", err)
 				}
 				text := body.String()
-				if !strings.Contains(text, `"id":"storage-1"`) || !strings.Contains(text, `"kind":"local"`) || !strings.Contains(text, `"uri":"file:///repo"`) || !strings.Contains(text, `"region":"eu-north-1"`) || !strings.Contains(text, `"endpoint":"https://s3.example.com"`) || !strings.Contains(text, `"credentials":"env"`) || !strings.Contains(text, `"access_key":"access"`) || !strings.Contains(text, `"secret_key":"secret"`) || !strings.Contains(text, `"session_token":"token"`) || !strings.Contains(text, `"force_path_style":true`) {
+				if !strings.Contains(text, `"id":"storage-1"`) || !strings.Contains(text, `"kind":"local"`) || !strings.Contains(text, `"uri":"file:///repo"`) || !strings.Contains(text, `"region":"eu-north-1"`) || !strings.Contains(text, `"endpoint":"https://s3.example.com"`) || !strings.Contains(text, `"credentials":"env"`) || !strings.Contains(text, `"access_key":"access"`) || !strings.Contains(text, `"secret_key":"${env:S3_SECRET_KEY}"`) || !strings.Contains(text, `"session_token":"${env:S3_SESSION_TOKEN}"`) || !strings.Contains(text, `"force_path_style":true`) {
 					t.Fatalf("storage add request = %q", text)
 				}
 				w.Header().Set("Content-Type", "application/json")
@@ -69,7 +69,7 @@ func TestRunStorageAddListRemove(t *testing.T) {
 
 	var out bytes.Buffer
 	if err := run(context.Background(), &out, []string{
-		"storage", "add", "--server", server.URL, "--id", "storage-1", "--name", "local", "--kind", "local", "--uri", "file:///repo", "--region", "eu-north-1", "--endpoint", "https://s3.example.com", "--credentials", "env", "--access-key", "access", "--secret-key", "secret", "--session-token", "token", "--force-path-style",
+		"storage", "add", "--server", server.URL, "--id", "storage-1", "--name", "local", "--kind", "local", "--uri", "file:///repo", "--region", "eu-north-1", "--endpoint", "https://s3.example.com", "--credentials", "env", "--access-key", "access", "--secret-key-ref", "${env:S3_SECRET_KEY}", "--session-token-ref", "${env:S3_SESSION_TOKEN}", "--force-path-style",
 	}); err != nil {
 		t.Fatalf("storage add error = %v", err)
 	}
@@ -124,6 +124,20 @@ func TestRunStorageAddRequiresFields(t *testing.T) {
 	}
 	if err := run(context.Background(), &out, []string{"storage", "update", "--name", "repo", "--kind", "local", "--uri", "file:///repo"}); err == nil {
 		t.Fatal("storage update without id error = nil, want error")
+	}
+}
+
+func TestRunStorageRejectsConflictingSecretFlags(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	err := run(context.Background(), &out, []string{"storage", "add", "--name", "repo", "--kind", "s3", "--uri", "s3://repo", "--secret-key", "secret", "--secret-key-ref", "${env:S3_SECRET_KEY}"})
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("storage add conflicting secret-key flags error = %v, want mutually exclusive", err)
+	}
+	err = run(context.Background(), &out, []string{"storage", "update", "--id", "storage-1", "--name", "repo", "--kind", "s3", "--uri", "s3://repo", "--access-key-ref", "env:S3_ACCESS_KEY"})
+	if err == nil || !strings.Contains(err.Error(), "secret reference syntax") {
+		t.Fatalf("storage update malformed access-key ref error = %v, want syntax error", err)
 	}
 }
 

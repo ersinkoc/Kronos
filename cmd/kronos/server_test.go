@@ -3514,6 +3514,88 @@ func TestServerTargetCRUD(t *testing.T) {
 	}
 }
 
+func TestServerRejectsMalformedResourceSecretReferences(t *testing.T) {
+	t.Parallel()
+
+	db, err := kvstore.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+	stores, err := newAPIStores(db)
+	if err != nil {
+		t.Fatalf("newAPIStores() error = %v", err)
+	}
+	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, stores))
+	defer server.Close()
+
+	for _, seed := range []struct {
+		path string
+		body string
+	}{
+		{path: "/api/v1/targets", body: `{"id":"target-ok","name":"ok","driver":"redis","endpoint":"127.0.0.1:6379","options":{"password":"${env:REDIS_PASSWORD}"}}`},
+		{path: "/api/v1/storages", body: `{"id":"storage-ok","name":"ok","kind":"s3","uri":"s3://repo","options":{"secret_key":"${env:S3_SECRET_KEY}"}}`},
+	} {
+		resp, err := server.Client().Post(server.URL+seed.path, "application/json", strings.NewReader(seed.body))
+		if err != nil {
+			t.Fatalf("POST seed resource error = %v", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("POST seed resource %s status = %d, want 200", seed.path, resp.StatusCode)
+		}
+	}
+
+	cases := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{
+			name:   "create target",
+			method: http.MethodPost,
+			path:   "/api/v1/targets",
+			body:   `{"id":"target-bad","name":"bad","driver":"redis","endpoint":"127.0.0.1:6379","options":{"password":"${env:REDIS_PASSWORD"}}`,
+		},
+		{
+			name:   "create storage",
+			method: http.MethodPost,
+			path:   "/api/v1/storages",
+			body:   `{"id":"storage-bad","name":"bad","kind":"s3","uri":"s3://repo","options":{"secret_key":"${missing}"}}`,
+		},
+		{
+			name:   "update target",
+			method: http.MethodPut,
+			path:   "/api/v1/targets/target-ok",
+			body:   `{"name":"bad","driver":"redis","endpoint":"127.0.0.1:6379","options":{"password":"${env:REDIS_PASSWORD"}}`,
+		},
+		{
+			name:   "update storage",
+			method: http.MethodPut,
+			path:   "/api/v1/storages/storage-ok",
+			body:   `{"name":"bad","kind":"s3","uri":"s3://repo","options":{"secret_key":"${missing}"}}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest(tc.method, server.URL+tc.path, strings.NewReader(tc.body))
+			if err != nil {
+				t.Fatalf("NewRequest() error = %v", err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := server.Client().Do(req)
+			if err != nil {
+				t.Fatalf("Do() error = %v", err)
+			}
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("%s status = %d, want 400", tc.name, resp.StatusCode)
+			}
+		})
+	}
+}
+
 func TestServerNotificationCRUD(t *testing.T) {
 	t.Parallel()
 

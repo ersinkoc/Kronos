@@ -121,7 +121,8 @@ run.
 - Optional state DB encryption for sensitive target/storage option values via
   `server.master_passphrase`.
 - Agent-side resolution for full-value target/storage secret placeholders,
-  allowing API-created resources to persist references instead of raw secrets.
+  CLI `*-ref` helper flags for managed resource credentials, and API
+  validation that rejects malformed target/storage placeholder syntax.
 - Health, readiness, metrics, OpenAPI, operations docs, deployment topology
   docs, single-replica Kubernetes deployment examples, restore drill docs,
   release verification docs, release scripts, provenance metadata, SBOM

@@ -233,6 +233,11 @@ and decrypted on authorized reads.
 Agents also resolve full-value target/storage option placeholders at execution
 time, so API-created resources can store `${env:DB_PASSWORD}` or
 `${file:/run/secrets/s3.json#secret_key}` instead of raw credential values.
+Use CLI helper flags such as `--password-ref`, `--access-key-ref`,
+`--secret-key-ref`, `--session-token-ref`, or `--credentials-ref` to create
+those references without placing raw resource credentials in command history.
+The control plane rejects malformed placeholder syntax on target/storage
+create and update requests.
 
 ## Verify A Backup Manifest
 

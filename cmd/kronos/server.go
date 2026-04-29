@@ -3982,6 +3982,25 @@ func isSecretOptionKey(key string) bool {
 	return false
 }
 
+func validateResourceOptionPlaceholders(options map[string]any) error {
+	for key, value := range options {
+		text, ok := value.(string)
+		if !ok {
+			continue
+		}
+		trimmed := strings.TrimSpace(text)
+		if !strings.HasPrefix(trimmed, "${") {
+			continue
+		}
+		if _, found, err := secret.ParsePlaceholder(trimmed); err != nil {
+			return fmt.Errorf("option %q secret reference: %w", key, err)
+		} else if !found {
+			return fmt.Errorf("option %q secret reference must use ${scheme:path#field} syntax", key)
+		}
+	}
+	return nil
+}
+
 func handleListTargets(w http.ResponseWriter, r *http.Request, store *control.TargetStore) {
 	if store == nil {
 		writeJSON(w, map[string]any{"targets": []any{}})
@@ -4008,6 +4027,10 @@ func handleCreateTarget(w http.ResponseWriter, r *http.Request, store *control.T
 	var target core.Target
 	if err := decodeJSONRequest(w, r, &target); err != nil {
 		http.Error(w, "invalid target", http.StatusBadRequest)
+		return
+	}
+	if err := validateResourceOptionPlaceholders(target.Options); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	now := time.Now().UTC()
@@ -4058,6 +4081,10 @@ func handleUpdateTarget(w http.ResponseWriter, r *http.Request, store *control.T
 	var target core.Target
 	if err := decodeJSONRequest(w, r, &target); err != nil {
 		http.Error(w, "invalid target", http.StatusBadRequest)
+		return
+	}
+	if err := validateResourceOptionPlaceholders(target.Options); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	existing, ok, err := store.Get(id)
@@ -4131,6 +4158,10 @@ func handleCreateStorage(w http.ResponseWriter, r *http.Request, store *control.
 		http.Error(w, "invalid storage", http.StatusBadRequest)
 		return
 	}
+	if err := validateResourceOptionPlaceholders(storage.Options); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	now := time.Now().UTC()
 	if storage.ID.IsZero() {
 		id, err := core.NewID(core.RealClock{})
@@ -4179,6 +4210,10 @@ func handleUpdateStorage(w http.ResponseWriter, r *http.Request, store *control.
 	var storage core.Storage
 	if err := decodeJSONRequest(w, r, &storage); err != nil {
 		http.Error(w, "invalid storage", http.StatusBadRequest)
+		return
+	}
+	if err := validateResourceOptionPlaceholders(storage.Options); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	existing, ok, err := store.Get(id)

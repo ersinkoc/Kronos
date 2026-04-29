@@ -14,6 +14,7 @@ import (
 	mysqldriver "github.com/kronos/kronos/internal/drivers/mysql"
 	postgresdriver "github.com/kronos/kronos/internal/drivers/postgres"
 	redisdriver "github.com/kronos/kronos/internal/drivers/redis"
+	"github.com/kronos/kronos/internal/secret"
 )
 
 func runTarget(ctx context.Context, out io.Writer, args []string) error {
@@ -70,6 +71,7 @@ func runTargetAdd(ctx context.Context, out io.Writer, args []string) error {
 	database := fs.String("database", "", "database name")
 	username := fs.String("user", "", "connection username")
 	password := fs.String("password", "", "connection password")
+	passwordRef := fs.String("password-ref", "", "secret reference for connection password, for example ${env:REDIS_PASSWORD}")
 	tlsMode := fs.String("tls", "", "connection TLS mode")
 	agentID := fs.String("agent", "", "agent id assigned to this target")
 	tier := fs.String("tier", "", "target tier label")
@@ -96,8 +98,12 @@ func runTargetAdd(ctx context.Context, out io.Writer, args []string) error {
 	if *username != "" {
 		options["username"] = *username
 	}
-	if *password != "" {
-		options["password"] = *password
+	passwordValue, err := secretOptionValue(*password, *passwordRef, "password", "password-ref")
+	if err != nil {
+		return err
+	}
+	if passwordValue != "" {
+		options["password"] = passwordValue
 	}
 	if *tlsMode != "" {
 		options["tls"] = *tlsMode
@@ -128,6 +134,7 @@ func runTargetUpdate(ctx context.Context, out io.Writer, args []string) error {
 	database := fs.String("database", "", "database name")
 	username := fs.String("user", "", "connection username")
 	password := fs.String("password", "", "connection password")
+	passwordRef := fs.String("password-ref", "", "secret reference for connection password, for example ${env:REDIS_PASSWORD}")
 	tlsMode := fs.String("tls", "", "connection TLS mode")
 	agentID := fs.String("agent", "", "agent id assigned to this target")
 	tier := fs.String("tier", "", "target tier label")
@@ -157,8 +164,12 @@ func runTargetUpdate(ctx context.Context, out io.Writer, args []string) error {
 	if *username != "" {
 		options["username"] = *username
 	}
-	if *password != "" {
-		options["password"] = *password
+	passwordValue, err := secretOptionValue(*password, *passwordRef, "password", "password-ref")
+	if err != nil {
+		return err
+	}
+	if passwordValue != "" {
+		options["password"] = passwordValue
 	}
 	if *tlsMode != "" {
 		options["tls"] = *tlsMode
@@ -177,6 +188,24 @@ func runTargetUpdate(ctx context.Context, out io.Writer, args []string) error {
 		payload.Labels = labels
 	}
 	return putControlJSON(ctx, http.DefaultClient, *serverAddr, "/api/v1/targets/"+*id, payload, out)
+}
+
+func secretOptionValue(raw string, ref string, rawFlag string, refFlag string) (string, error) {
+	if raw != "" && ref != "" {
+		return "", fmt.Errorf("--%s and --%s are mutually exclusive", rawFlag, refFlag)
+	}
+	if ref == "" {
+		return raw, nil
+	}
+	trimmed := strings.TrimSpace(ref)
+	_, ok, err := secret.ParsePlaceholder(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("--%s: %w", refFlag, err)
+	}
+	if !ok {
+		return "", fmt.Errorf("--%s must use ${scheme:path#field} secret reference syntax", refFlag)
+	}
+	return trimmed, nil
 }
 
 func runTargetRemove(ctx context.Context, out io.Writer, args []string) error {

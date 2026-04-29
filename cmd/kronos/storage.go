@@ -72,9 +72,13 @@ func runStorageAdd(ctx context.Context, out io.Writer, args []string) error {
 	region := fs.String("region", "", "storage region")
 	endpoint := fs.String("endpoint", "", "storage API endpoint")
 	credentials := fs.String("credentials", "", "storage credentials mode or reference")
+	credentialsRef := fs.String("credentials-ref", "", "secret reference for storage credentials, for example ${file:/run/secrets/s3.json#credentials}")
 	accessKey := fs.String("access-key", "", "static S3 access key")
+	accessKeyRef := fs.String("access-key-ref", "", "secret reference for static S3 access key, for example ${env:S3_ACCESS_KEY}")
 	secretKey := fs.String("secret-key", "", "static S3 secret key")
+	secretKeyRef := fs.String("secret-key-ref", "", "secret reference for static S3 secret key, for example ${env:S3_SECRET_KEY}")
 	sessionToken := fs.String("session-token", "", "static S3 session token")
+	sessionTokenRef := fs.String("session-token-ref", "", "secret reference for static S3 session token, for example ${env:S3_SESSION_TOKEN}")
 	forcePathStyle := fs.Bool("force-path-style", false, "use path-style S3 requests")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -101,17 +105,33 @@ func runStorageAdd(ctx context.Context, out io.Writer, args []string) error {
 	if *endpoint != "" {
 		options["endpoint"] = *endpoint
 	}
-	if *credentials != "" {
-		options["credentials"] = *credentials
+	credentialsValue, err := secretOptionValue(*credentials, *credentialsRef, "credentials", "credentials-ref")
+	if err != nil {
+		return err
 	}
-	if *accessKey != "" {
-		options["access_key"] = *accessKey
+	accessKeyValue, err := secretOptionValue(*accessKey, *accessKeyRef, "access-key", "access-key-ref")
+	if err != nil {
+		return err
 	}
-	if *secretKey != "" {
-		options["secret_key"] = *secretKey
+	secretKeyValue, err := secretOptionValue(*secretKey, *secretKeyRef, "secret-key", "secret-key-ref")
+	if err != nil {
+		return err
 	}
-	if *sessionToken != "" {
-		options["session_token"] = *sessionToken
+	sessionTokenValue, err := secretOptionValue(*sessionToken, *sessionTokenRef, "session-token", "session-token-ref")
+	if err != nil {
+		return err
+	}
+	if credentialsValue != "" {
+		options["credentials"] = credentialsValue
+	}
+	if accessKeyValue != "" {
+		options["access_key"] = accessKeyValue
+	}
+	if secretKeyValue != "" {
+		options["secret_key"] = secretKeyValue
+	}
+	if sessionTokenValue != "" {
+		options["session_token"] = sessionTokenValue
 	}
 	if *forcePathStyle {
 		options["force_path_style"] = true
@@ -132,9 +152,13 @@ func runStorageUpdate(ctx context.Context, out io.Writer, args []string) error {
 	region := fs.String("region", "", "storage region")
 	endpoint := fs.String("endpoint", "", "storage API endpoint")
 	credentials := fs.String("credentials", "", "storage credentials mode or reference")
+	credentialsRef := fs.String("credentials-ref", "", "secret reference for storage credentials, for example ${file:/run/secrets/s3.json#credentials}")
 	accessKey := fs.String("access-key", "", "static S3 access key")
+	accessKeyRef := fs.String("access-key-ref", "", "secret reference for static S3 access key, for example ${env:S3_ACCESS_KEY}")
 	secretKey := fs.String("secret-key", "", "static S3 secret key")
+	secretKeyRef := fs.String("secret-key-ref", "", "secret reference for static S3 secret key, for example ${env:S3_SECRET_KEY}")
 	sessionToken := fs.String("session-token", "", "static S3 session token")
+	sessionTokenRef := fs.String("session-token-ref", "", "secret reference for static S3 session token, for example ${env:S3_SESSION_TOKEN}")
 	forcePathStyle := fs.Bool("force-path-style", false, "use path-style S3 requests")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -164,17 +188,33 @@ func runStorageUpdate(ctx context.Context, out io.Writer, args []string) error {
 	if *endpoint != "" {
 		options["endpoint"] = *endpoint
 	}
-	if *credentials != "" {
-		options["credentials"] = *credentials
+	credentialsValue, err := secretOptionValue(*credentials, *credentialsRef, "credentials", "credentials-ref")
+	if err != nil {
+		return err
 	}
-	if *accessKey != "" {
-		options["access_key"] = *accessKey
+	accessKeyValue, err := secretOptionValue(*accessKey, *accessKeyRef, "access-key", "access-key-ref")
+	if err != nil {
+		return err
 	}
-	if *secretKey != "" {
-		options["secret_key"] = *secretKey
+	secretKeyValue, err := secretOptionValue(*secretKey, *secretKeyRef, "secret-key", "secret-key-ref")
+	if err != nil {
+		return err
 	}
-	if *sessionToken != "" {
-		options["session_token"] = *sessionToken
+	sessionTokenValue, err := secretOptionValue(*sessionToken, *sessionTokenRef, "session-token", "session-token-ref")
+	if err != nil {
+		return err
+	}
+	if credentialsValue != "" {
+		options["credentials"] = credentialsValue
+	}
+	if accessKeyValue != "" {
+		options["access_key"] = accessKeyValue
+	}
+	if secretKeyValue != "" {
+		options["secret_key"] = secretKeyValue
+	}
+	if sessionTokenValue != "" {
+		options["session_token"] = sessionTokenValue
 	}
 	if *forcePathStyle {
 		options["force_path_style"] = true

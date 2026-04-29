@@ -31,7 +31,7 @@ func TestRunTargetAddListRemove(t *testing.T) {
 					t.Fatalf("ReadFrom(request) error = %v", err)
 				}
 				text := body.String()
-				if !strings.Contains(text, `"id":"target-1"`) || !strings.Contains(text, `"driver":"redis"`) || !strings.Contains(text, `"endpoint":"127.0.0.1:6379"`) || !strings.Contains(text, `"database":"0"`) || !strings.Contains(text, `"username":"backup"`) || !strings.Contains(text, `"password":"secret"`) || !strings.Contains(text, `"tls":"disable"`) || !strings.Contains(text, `"agent":"agent-1"`) || !strings.Contains(text, `"tier":"tier0"`) {
+				if !strings.Contains(text, `"id":"target-1"`) || !strings.Contains(text, `"driver":"redis"`) || !strings.Contains(text, `"endpoint":"127.0.0.1:6379"`) || !strings.Contains(text, `"database":"0"`) || !strings.Contains(text, `"username":"backup"`) || !strings.Contains(text, `"password":"${env:REDIS_PASSWORD}"`) || !strings.Contains(text, `"tls":"disable"`) || !strings.Contains(text, `"agent":"agent-1"`) || !strings.Contains(text, `"tier":"tier0"`) {
 					t.Fatalf("target add request = %q", text)
 				}
 				w.Header().Set("Content-Type", "application/json")
@@ -69,7 +69,7 @@ func TestRunTargetAddListRemove(t *testing.T) {
 
 	var out bytes.Buffer
 	if err := run(context.Background(), &out, []string{
-		"target", "add", "--server", server.URL, "--id", "target-1", "--name", "redis", "--driver", "redis", "--endpoint", "127.0.0.1:6379", "--database", "0", "--user", "backup", "--password", "secret", "--tls", "disable", "--agent", "agent-1", "--tier", "tier0",
+		"target", "add", "--server", server.URL, "--id", "target-1", "--name", "redis", "--driver", "redis", "--endpoint", "127.0.0.1:6379", "--database", "0", "--user", "backup", "--password-ref", "${env:REDIS_PASSWORD}", "--tls", "disable", "--agent", "agent-1", "--tier", "tier0",
 	}); err != nil {
 		t.Fatalf("target add error = %v", err)
 	}
@@ -130,6 +130,20 @@ func TestRunTargetAddRequiresFields(t *testing.T) {
 	}
 	if err := run(context.Background(), &out, []string{"target", "test", "--driver", "redis"}); err == nil {
 		t.Fatal("target test without endpoint error = nil, want error")
+	}
+}
+
+func TestRunTargetRejectsConflictingSecretFlags(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	err := run(context.Background(), &out, []string{"target", "add", "--name", "redis", "--driver", "redis", "--endpoint", "127.0.0.1:6379", "--password", "secret", "--password-ref", "${env:REDIS_PASSWORD}"})
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("target add conflicting password flags error = %v, want mutually exclusive", err)
+	}
+	err = run(context.Background(), &out, []string{"target", "update", "--id", "target-1", "--name", "redis", "--driver", "redis", "--endpoint", "127.0.0.1:6379", "--password-ref", "${env:REDIS_PASSWORD"})
+	if err == nil || !strings.Contains(err.Error(), "secret reference syntax") {
+		t.Fatalf("target update malformed password ref error = %v, want syntax error", err)
 	}
 }
 

@@ -46,6 +46,7 @@ need `agent:write`, `job:write`, `target:read`, `storage:read`, and
 
 ```bash
 kronos target add --name redis --driver redis --endpoint 127.0.0.1:6379 --database 0 --user backup --password "$REDIS_PASSWORD" --tls disable --agent agent-1 --tier tier0
+kronos target add --name redis --driver redis --endpoint 127.0.0.1:6379 --database 0 --user backup --password-ref '${env:REDIS_PASSWORD}' --tls disable --agent agent-1 --tier tier0
 kronos target test redis --driver redis --endpoint 127.0.0.1:6379 --database 0 --user backup --password "$REDIS_PASSWORD"
 kronos target add --name pg --driver postgres --endpoint 127.0.0.1:5432 --database app --user backup --password "$POSTGRES_PASSWORD" --tls disable --agent agent-1
 kronos target test pg --driver postgres --endpoint 127.0.0.1:5432 --database app --user backup --password "$POSTGRES_PASSWORD" --tls disable
@@ -61,6 +62,7 @@ kronos target remove --id target-1
 kronos storage add --name repo --kind local --uri file:///var/lib/kronos/repo
 kronos storage add --name s3 --kind s3 --uri s3://kronos-backups --region eu-north-1 --endpoint https://s3.eu-north-1.amazonaws.com --credentials env
 kronos storage add --name minio --kind s3 --uri s3://kronos --region us-east-1 --endpoint http://127.0.0.1:9000 --access-key "$S3_ACCESS_KEY" --secret-key "$S3_SECRET_KEY" --force-path-style
+kronos storage add --name minio --kind s3 --uri s3://kronos --region us-east-1 --endpoint http://127.0.0.1:9000 --access-key-ref '${env:S3_ACCESS_KEY}' --secret-key-ref '${env:S3_SECRET_KEY}' --force-path-style
 kronos storage test --uri file:///var/lib/kronos/repo
 kronos storage test --uri s3://kronos --region us-east-1 --endpoint http://127.0.0.1:9000 --access-key "$S3_ACCESS_KEY" --secret-key "$S3_SECRET_KEY" --force-path-style
 kronos storage du --uri file:///var/lib/kronos/repo --prefix data/

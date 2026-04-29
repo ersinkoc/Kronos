@@ -198,7 +198,10 @@ values as full placeholders such as `${env:POSTGRES_PASSWORD}` or
 `${file:/run/secrets/s3.json#secret_key}`. The control plane persists the
 reference, and worker agents resolve it immediately before opening the
 database driver or storage backend. The referenced environment variable or file
-must exist on the agent host.
+must exist on the agent host. Prefer CLI helper flags such as `--password-ref`,
+`--access-key-ref`, `--secret-key-ref`, `--session-token-ref`, and
+`--credentials-ref` for managed resources; the API rejects malformed
+target/storage placeholder syntax during create and update.
 
 ## Alert Rule Examples
 
