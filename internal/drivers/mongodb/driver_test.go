@@ -3,6 +3,7 @@ package mongodb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -116,6 +117,36 @@ func TestDriverRestoreUsesMongoRestoreArchive(t *testing.T) {
 	}
 }
 
+func TestDriverRestoreFailureCleansTemporaryConfig(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{err: fmt.Errorf("restore failed")}
+	driver := &Driver{runner: runner}
+	var stream drivers.MemoryRecordStream
+	if err := stream.WriteRecord(drivers.ObjectRef{Name: "source", Kind: databaseObjectKind}, []byte("archive-bytes")); err != nil {
+		t.Fatalf("WriteRecord() error = %v", err)
+	}
+	target := drivers.Target{
+		Connection: map[string]string{
+			"addr":     "mongo.example:27018",
+			"database": "target",
+			"username": "backup",
+			"password": "secret",
+		},
+		Options: map[string]string{"authSource": "admin"},
+	}
+	err := driver.Restore(context.Background(), target, &stream, drivers.RestoreOptions{ReplaceExisting: true})
+	if err == nil || !strings.Contains(err.Error(), "restore failed") {
+		t.Fatalf("Restore() error = %v, want restore failed", err)
+	}
+	if len(runner.calls) != 1 || runner.calls[0].configPath == "" {
+		t.Fatalf("calls = %#v, want one config-backed mongorestore call", runner.calls)
+	}
+	if _, statErr := os.Stat(runner.calls[0].configPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("temporary config %s still exists or stat failed with %v", runner.calls[0].configPath, statErr)
+	}
+}
+
 func TestDriverRestoreRequiresReplaceExisting(t *testing.T) {
 	t.Parallel()
 
@@ -185,16 +216,18 @@ type fakeRunner struct {
 }
 
 type runnerCall struct {
-	name   string
-	args   []string
-	stdin  []byte
-	config string
+	name       string
+	args       []string
+	stdin      []byte
+	config     string
+	configPath string
 }
 
 func (r *fakeRunner) Run(_ context.Context, name string, args []string, stdin []byte) ([]byte, error) {
 	call := runnerCall{name: name, args: append([]string(nil), args...), stdin: append([]byte(nil), stdin...)}
 	for i := 0; i < len(args)-1; i++ {
 		if args[i] == "--config" {
+			call.configPath = args[i+1]
 			data, _ := os.ReadFile(args[i+1])
 			call.config = string(data)
 			break
