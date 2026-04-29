@@ -418,11 +418,17 @@ jobs:
         run: go test -tags=integration ./internal/drivers/mysql
 
   mongodb-conformance:
-    name: mongodb-conformance (7.0)
+    name: mongodb-conformance (${{ matrix.mongodb-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mongodb-version:
+          - "7.0"
+          - "8.0"
     services:
       mongodb:
-        image: mongodb/mongodb-community-server:7.0-ubuntu2204
+        image: mongodb/mongodb-community-server:${{ matrix.mongodb-version }}-ubuntu2204
         env:
           MONGO_INITDB_ROOT_USERNAME: kronos
           MONGO_INITDB_ROOT_PASSWORD: kronos
@@ -445,7 +451,7 @@ jobs:
 
       - name: Create MongoDB client wrappers
         env:
-          MONGODB_IMAGE: mongodb/mongodb-community-server:7.0-ubuntu2204
+          MONGODB_IMAGE: mongodb/mongodb-community-server:${{ matrix.mongodb-version }}-ubuntu2204
         run: |
           mkdir -p .tools/mongodb-client
           for command in mongosh mongodump mongorestore; do
@@ -465,7 +471,7 @@ jobs:
           KRONOS_MONGODB_TEST_USER: kronos
           KRONOS_MONGODB_TEST_PASSWORD: kronos
           KRONOS_MONGODB_TEST_AUTH_SOURCE: admin
-          MONGODB_IMAGE: mongodb/mongodb-community-server:7.0-ubuntu2204
+          MONGODB_IMAGE: mongodb/mongodb-community-server:${{ matrix.mongodb-version }}-ubuntu2204
         run: go test -tags=integration ./internal/drivers/mongodb
 
   mongodb-operator-scale-restore-drill:

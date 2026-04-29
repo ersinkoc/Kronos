@@ -48,8 +48,8 @@ This repository currently has the Phase 0 foundation in place and active Phase
   8.4, MariaDB 11.4, and bidirectional MySQL/MariaDB restore rehearsal
   coverage in CI, plus 10,000-row MySQL and MariaDB restore drills. MongoDB
   now has a `mongodump`/`mongorestore` archive MVP with deterministic unit
-  coverage, authenticated real-service MongoDB 7.0 conformance, and an
-  authenticated 10,000-document MongoDB restore drill in CI.
+  coverage, authenticated real-service MongoDB 7.0/8.0 conformance, and an
+  authenticated MongoDB 7.0 10,000-document restore drill in CI.
 - CLI: dispatcher, version, database repair,
   backup now/list/inspect/protect/unprotect/verification,
   target/storage add/list/inspect/update/remove, schedule add/list/inspect/pause/resume/remove,

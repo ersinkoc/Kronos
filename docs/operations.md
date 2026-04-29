@@ -350,9 +350,9 @@ groups:
    `--config` file so process listings contain only the config path.
    Set `KRONOS_MONGODB_TEST_USER`, `KRONOS_MONGODB_TEST_PASSWORD`, and
    `KRONOS_MONGODB_TEST_AUTH_SOURCE` when the service requires authentication.
-   The main CI workflow runs authenticated MongoDB 7.0 conformance and an
-   authenticated 10,000-document restore drill against separate source and
-   target service containers.
+   The main CI workflow runs authenticated MongoDB 7.0/8.0 conformance and an
+   authenticated MongoDB 7.0 10,000-document restore drill against separate
+   source and target service containers.
 
 2. Publish an immutable release from a signed tag when cutting a production
    version:

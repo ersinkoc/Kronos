@@ -125,8 +125,8 @@ streams; install MongoDB Database Tools on worker agents before using it.
 MongoDB passwords are written to a 0600 temporary Database Tools `--config`
 file so the process list contains only the config path, not the secret.
 MongoDB restores also require explicit replace-existing intent. CI exercises
-this path against MongoDB 7.0 with real-service backup/restore conformance and
-a 10,000-document restore drill.
+this path against MongoDB 7.0 and 8.0 with real-service backup/restore
+conformance, plus a MongoDB 7.0 10,000-document restore drill.
 
 ## 6. Run A Backup
 

@@ -19,9 +19,9 @@ JSONB rows across separate source and target services. It still needs broader
 upgrade rehearsals before it should be treated as a fully production-grade
 PostgreSQL path. MongoDB now has a `mongodump`/`mongorestore` archive MVP with
 deterministic unit coverage, explicit replace-existing restore guardrails,
-authenticated real-service MongoDB 7.0 conformance, and an authenticated
-10,000-document restore drill in CI; it still needs broader version/recovery
-coverage before it should be treated as production-grade. The full product vision across SFTP, Azure Blob, Google Cloud
+authenticated real-service MongoDB 7.0/8.0 conformance, and an authenticated
+MongoDB 7.0 10,000-document restore drill in CI; it still needs broader
+recovery coverage before it should be treated as production-grade. The full product vision across SFTP, Azure Blob, Google Cloud
 Storage, deeper WebUI workflows beyond the authenticated live
 overview/jobs/backups/inventory dashboard plus
 target/storage/schedule/retention/job/backup detail, schedule pause/resume, job
@@ -48,8 +48,8 @@ fully production-grade.
 | Scope | Estimate | Notes |
 | --- | ---: | --- |
 | Implemented Redis/local/S3 path | 95% | Core pipeline, TLS/mTLS-capable agent/control-plane transport, lost-agent recovery, server restart recovery, restore planning, retention, audit, metrics, release scripts, single-replica Kubernetes examples, runbooks, a reusable production gate, and tagged worker/control-plane/Redis backup, restore, retention apply, and recovery E2E tests are in place. |
-| Broad multi-database product vision | 96% | Redis is executable, PostgreSQL now has a plain SQL logical driver MVP, optional global role metadata capture, full global restore coverage, worker pipeline smoke E2E coverage, CI conformance coverage across PostgreSQL 15, 16, and 17, a PostgreSQL 15-to-17 restore rehearsal, and a 10,000-row PostgreSQL restore drill. MySQL/MariaDB now has a `mysqldump`/`mysql` logical MVP with unit coverage, real-service MySQL 8.4 and MariaDB 11.4 conformance, bidirectional MySQL/MariaDB restore rehearsal coverage, and 10,000-row MySQL/MariaDB restore drills. MongoDB now has a `mongodump`/`mongorestore` archive MVP with unit coverage, authenticated real-service MongoDB 7.0 conformance, and an authenticated 10,000-document restore drill, while storage backends, WebUI workflows, broader MongoDB version/recovery coverage, and multi-instance deployment patterns remain roadmap work. |
-| Current repository release hygiene | 99% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, GitHub build/SBOM attestations, keyless cosign signatures and verification, consumer release verification docs, CI govulncheck, release artifact smoke checks, PostgreSQL full global restore, PostgreSQL operator-scale restore, MySQL, MariaDB, bidirectional MySQL/MariaDB restore rehearsal conformance, 10,000-row MySQL/MariaDB restore drills, authenticated MongoDB service conformance, authenticated MongoDB operator-scale restore drill, the production check script, tagged backup/restore/retention/recovery E2E coverage, and Node 24-native GitHub Actions are present. The `golang.org/x/crypto` advisories are fixed. |
+| Broad multi-database product vision | 96% | Redis is executable, PostgreSQL now has a plain SQL logical driver MVP, optional global role metadata capture, full global restore coverage, worker pipeline smoke E2E coverage, CI conformance coverage across PostgreSQL 15, 16, and 17, a PostgreSQL 15-to-17 restore rehearsal, and a 10,000-row PostgreSQL restore drill. MySQL/MariaDB now has a `mysqldump`/`mysql` logical MVP with unit coverage, real-service MySQL 8.4 and MariaDB 11.4 conformance, bidirectional MySQL/MariaDB restore rehearsal coverage, and 10,000-row MySQL/MariaDB restore drills. MongoDB now has a `mongodump`/`mongorestore` archive MVP with unit coverage, authenticated real-service MongoDB 7.0/8.0 conformance, and an authenticated MongoDB 7.0 10,000-document restore drill, while storage backends, WebUI workflows, broader MongoDB recovery coverage, and multi-instance deployment patterns remain roadmap work. |
+| Current repository release hygiene | 99% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, GitHub build/SBOM attestations, keyless cosign signatures and verification, consumer release verification docs, CI govulncheck, release artifact smoke checks, PostgreSQL full global restore, PostgreSQL operator-scale restore, MySQL, MariaDB, bidirectional MySQL/MariaDB restore rehearsal conformance, 10,000-row MySQL/MariaDB restore drills, authenticated MongoDB 7.0/8.0 service conformance, authenticated MongoDB 7.0 operator-scale restore drill, the production check script, tagged backup/restore/retention/recovery E2E coverage, and Node 24-native GitHub Actions are present. The `golang.org/x/crypto` advisories are fixed. |
 
 ## Current Release Gate
 
@@ -104,10 +104,10 @@ run.
   tests, archive records, namespace remapping, replace-existing guardrails,
   dry-run behavior, process-list password exposure avoidance through 0600
   temporary Database Tools `--config` files, and unsupported incremental/oplog paths. CI now runs
-  authenticated MongoDB 7.0 real-service conformance with archive
+  authenticated MongoDB 7.0/8.0 real-service conformance with archive
   backup/restore into a remapped database, indexed document count/checksum
-  verification, and an authenticated 10,000-document restore drill across
-  separate source and target services.
+  verification, and an authenticated MongoDB 7.0 10,000-document restore drill
+  across separate source and target services.
 - Local and S3-compatible storage backends.
 - Persistent control plane state, scheduler state, jobs, backups, retention,
   notifications, users, tokens, and audit log.
@@ -148,8 +148,8 @@ run.
   PostgreSQL 17 full global restore rehearsal, PostgreSQL 17 operator-scale
   restore drill, MySQL 8.4 and MariaDB 11.4 service conformance,
   bidirectional MySQL/MariaDB restore rehearsals, 10,000-row MySQL/MariaDB
-  restore drills, authenticated MongoDB 7.0 service conformance,
-  authenticated MongoDB 10,000-document restore drill, release artifact
+  restore drills, authenticated MongoDB 7.0/8.0 service conformance,
+  authenticated MongoDB 7.0 10,000-document restore drill, release artifact
   verification, container builds, completion
   syntax checks, and the
   production-readiness gate. Release
@@ -169,8 +169,8 @@ run.
 
 ## Blocking Work Before Calling The Whole Product Production-Ready
 
-1. Add broader MongoDB version/recovery coverage beyond the MongoDB 7.0
-   archive restore drill.
+1. Add broader MongoDB recovery coverage beyond the MongoDB 7.0/8.0
+   archive conformance and MongoDB 7.0 restore drill.
 2. Harden PostgreSQL operational behavior around broader upgrade rehearsal
    evidence.
 3. Extend E2E coverage into more retention policy edge cases and release
@@ -182,8 +182,8 @@ run.
 
 ## Next Engineering Slices
 
-1. Add broader MongoDB version/recovery coverage beyond the authenticated
-   MongoDB 7.0 archive restore drills.
+1. Add broader MongoDB recovery coverage beyond the authenticated MongoDB
+   7.0/8.0 archive conformance and MongoDB 7.0 restore drill.
 2. Extend PostgreSQL hardening around broader upgrade rehearsal evidence.
 3. Run a signed-tag release rehearsal and archive checksum, signature, and
    attestation verification evidence.

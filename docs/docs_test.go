@@ -178,6 +178,28 @@ func TestReleaseVerificationDocumentsSupplyChainChecks(t *testing.T) {
 	}
 }
 
+func TestCIWorkflowCoversMongoDBConformanceVersions(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatalf("ReadFile(ci.yml) error = %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"name: mongodb-conformance (${{ matrix.mongodb-version }})",
+		"mongodb-version:",
+		`- "7.0"`,
+		`- "8.0"`,
+		"mongodb/mongodb-community-server:${{ matrix.mongodb-version }}-ubuntu2204",
+		"go test -tags=integration ./internal/drivers/mongodb",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("ci.yml missing %q", want)
+		}
+	}
+}
+
 func markdownFiles(t *testing.T, root string) []string {
 	t.Helper()
 
