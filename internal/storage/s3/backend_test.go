@@ -19,7 +19,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kronos/kronos/internal/chunk"
+	kcompress "github.com/kronos/kronos/internal/compress"
 	"github.com/kronos/kronos/internal/core"
+	kcrypto "github.com/kronos/kronos/internal/crypto"
 	"github.com/kronos/kronos/internal/storage"
 )
 
@@ -324,6 +327,57 @@ func TestBackendMissingAndRangeErrors(t *testing.T) {
 	}
 }
 
+func TestBackendPipelineRestoreRejectsMissingChunkObject(t *testing.T) {
+	t.Parallel()
+
+	server := newMockS3Server(t)
+	backend := newMockBackend(t, server.URL)
+	pipeline := testS3Pipeline(t, backend)
+	refs, _, err := pipeline.Feed(context.Background(), strings.NewReader("missing s3 chunk drill"))
+	if err != nil {
+		t.Fatalf("Feed() error = %v", err)
+	}
+
+	server.mu.Lock()
+	delete(server.objects, refs[0].Key)
+	server.mu.Unlock()
+
+	var got bytes.Buffer
+	_, err = pipeline.Restore(context.Background(), refs, &got)
+	if err == nil {
+		t.Fatal("Restore() error = nil, want missing S3 object")
+	}
+	if !strings.Contains(err.Error(), "get chunk") || !strings.Contains(err.Error(), refs[0].Key) {
+		t.Fatalf("Restore() error = %q, want missing object key", err)
+	}
+}
+
+func TestBackendPipelineRestoreRejectsCorruptChunkObject(t *testing.T) {
+	t.Parallel()
+
+	server := newMockS3Server(t)
+	backend := newMockBackend(t, server.URL)
+	pipeline := testS3Pipeline(t, backend)
+	refs, _, err := pipeline.Feed(context.Background(), strings.NewReader("corrupt s3 chunk drill"))
+	if err != nil {
+		t.Fatalf("Feed() error = %v", err)
+	}
+
+	corrupt := []byte("not a valid encrypted chunk envelope")
+	server.mu.Lock()
+	server.objects[refs[0].Key] = mockS3Object{data: corrupt, etag: hashBytes(corrupt), modifiedAt: server.modifiedAt}
+	server.mu.Unlock()
+
+	var got bytes.Buffer
+	_, err = pipeline.Restore(context.Background(), refs, &got)
+	if err == nil {
+		t.Fatal("Restore() error = nil, want corrupt S3 object")
+	}
+	if !strings.Contains(err.Error(), "decrypt chunk") {
+		t.Fatalf("Restore() error = %q, want decrypt failure", err)
+	}
+}
+
 func TestBackendConstructorAndHelpers(t *testing.T) {
 	t.Parallel()
 
@@ -399,6 +453,31 @@ func newMockBackend(t *testing.T, endpoint string) *Backend {
 		t.Fatalf("New() error = %v", err)
 	}
 	return backend
+}
+
+func testS3Pipeline(t *testing.T, backend *Backend) *chunk.Pipeline {
+	t.Helper()
+
+	chunker, err := chunk.NewFastCDC(4, 8, 16)
+	if err != nil {
+		t.Fatalf("NewFastCDC() error = %v", err)
+	}
+	compressor, err := kcompress.New(kcompress.AlgorithmNone)
+	if err != nil {
+		t.Fatalf("compress.New() error = %v", err)
+	}
+	cipher, err := kcrypto.NewAES256GCM(bytes.Repeat([]byte{5}, 32))
+	if err != nil {
+		t.Fatalf("NewAES256GCM() error = %v", err)
+	}
+	return &chunk.Pipeline{
+		Chunker:     chunker,
+		Compressor:  compressor,
+		Cipher:      cipher,
+		KeyID:       "s3-test-key",
+		Backend:     backend,
+		Concurrency: 1,
+	}
 }
 
 type mockS3Object struct {
