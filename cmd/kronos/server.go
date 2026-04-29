@@ -37,6 +37,11 @@ import (
 const defaultSchedulerInterval = time.Minute
 const authVerifyRateLimit = 10
 const authVerifyRateWindow = time.Minute
+const defaultMaxRequestBodyBytes int64 = 1 << 20
+const defaultReadHeaderTimeout = 5 * time.Second
+const defaultReadTimeout = 10 * time.Second
+const defaultWriteTimeout = 30 * time.Second
+const defaultIdleTimeout = time.Minute
 
 func runServer(ctx context.Context, out io.Writer, args []string) error {
 	fs := newFlagSet("server", out)
@@ -123,7 +128,10 @@ func serveControlPlaneWithOptions(ctx context.Context, out io.Writer, listenAddr
 	registry := control.NewAgentRegistry(nil, 30*time.Second)
 	server := &http.Server{
 		Handler:           newServerHandlerWithStoresAuth(cfg, registry, stores, opts.InsecureNoAuth),
-		ReadHeaderTimeout: 5 * time.Second,
+		ReadHeaderTimeout: serverDuration(cfg, "read_header_timeout", defaultReadHeaderTimeout),
+		ReadTimeout:       serverDuration(cfg, "read_timeout", defaultReadTimeout),
+		WriteTimeout:      serverDuration(cfg, "write_timeout", defaultWriteTimeout),
+		IdleTimeout:       serverDuration(cfg, "idle_timeout", defaultIdleTimeout),
 	}
 	startSchedulerLoop(ctx, out, stores, registry, defaultSchedulerInterval)
 	errCh := make(chan error, 1)
@@ -405,6 +413,46 @@ func withJSONErrors(next http.Handler) http.Handler {
 	})
 }
 
+type requestBodyLimitContextKey struct{}
+
+func withRequestBodyLimit(next http.Handler, limit int64) http.Handler {
+	if limit <= 0 {
+		limit = defaultMaxRequestBodyBytes
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if shouldLimitRequestBody(r) {
+			if r.ContentLength > limit {
+				http.Error(w, fmt.Sprintf("request body must be at most %d bytes", limit), http.StatusRequestEntityTooLarge)
+				return
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
+		}
+		ctx := context.WithValue(r.Context(), requestBodyLimitContextKey{}, limit)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func shouldLimitRequestBody(r *http.Request) bool {
+	if r == nil || !isControlPlanePath(r.URL.Path) {
+		return false
+	}
+	switch r.Method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch:
+		return true
+	default:
+		return false
+	}
+}
+
+func requestBodyLimit(r *http.Request) int64 {
+	if r != nil {
+		if limit, ok := r.Context().Value(requestBodyLimitContextKey{}).(int64); ok && limit > 0 {
+			return limit
+		}
+	}
+	return defaultMaxRequestBodyBytes
+}
+
 type errorResponseRecorder struct {
 	w      http.ResponseWriter
 	header http.Header
@@ -539,6 +587,40 @@ func authRateLimitSettings(cfg *config.Config) (int, time.Duration) {
 		}
 	}
 	return limit, window
+}
+
+func serverDuration(cfg *config.Config, name string, fallback time.Duration) time.Duration {
+	if cfg == nil {
+		return fallback
+	}
+	var raw string
+	switch name {
+	case "read_header_timeout":
+		raw = cfg.Server.ReadHeaderTimeout
+	case "read_timeout":
+		raw = cfg.Server.ReadTimeout
+	case "write_timeout":
+		raw = cfg.Server.WriteTimeout
+	case "idle_timeout":
+		raw = cfg.Server.IdleTimeout
+	default:
+		return fallback
+	}
+	if strings.TrimSpace(raw) == "" {
+		return fallback
+	}
+	duration, err := time.ParseDuration(raw)
+	if err != nil || duration <= 0 {
+		return fallback
+	}
+	return duration
+}
+
+func maxRequestBodyBytes(cfg *config.Config) int64 {
+	if cfg != nil && cfg.Server.MaxRequestBodyBytes > 0 {
+		return cfg.Server.MaxRequestBodyBytes
+	}
+	return defaultMaxRequestBodyBytes
 }
 
 func newAPIStores(db *kvstore.DB) (apiStores, error) {
@@ -1401,7 +1483,7 @@ func newServerHandlerWithStoresAuth(cfg *config.Config, registry *control.AgentR
 		}
 	})
 	mux.Handle("/", webui.Handler())
-	return withSecurityHeaders(withControlPlaneCacheHeaders(withRequestID(withJSONErrors(withAuthPolicy(mux, insecureNoAuth)))))
+	return withSecurityHeaders(withControlPlaneCacheHeaders(withRequestID(withJSONErrors(withRequestBodyLimit(withAuthPolicy(mux, insecureNoAuth), maxRequestBodyBytes(cfg))))))
 }
 
 func applyStoreSecretProtection(stores apiStores, cfg *config.Config) error {
@@ -4528,7 +4610,7 @@ func handlePauseSchedule(w http.ResponseWriter, r *http.Request, store *control.
 
 func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) error {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, requestBodyLimit(r)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(dst); err != nil {
 		return err
@@ -4538,7 +4620,7 @@ func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) error {
 
 func decodeOptionalJSONRequest(w http.ResponseWriter, r *http.Request, dst any) error {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, requestBodyLimit(r)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(dst); err != nil && !errors.Is(err, io.EOF) {
 		return err

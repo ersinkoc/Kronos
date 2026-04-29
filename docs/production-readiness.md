@@ -128,6 +128,8 @@ run.
 - Store-level resource validation for ID shape, target driver enums, storage
   kind/URI scheme compatibility, schedule backup types, cron/window
   expressions, retention rule kinds, and scalar target/storage option schemas.
+- Configurable control-plane request body cap plus read-header, read, write,
+  and idle HTTP server timeouts.
 - Health, readiness, metrics, OpenAPI, operations docs, deployment topology
   docs, single-replica Kubernetes deployment examples, restore drill docs,
   release verification docs, release scripts, provenance metadata, SBOM

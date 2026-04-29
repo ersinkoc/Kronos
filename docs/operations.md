@@ -40,6 +40,11 @@ For public or shared control planes, set token verification throttling in
 
 ```yaml
 server:
+  max_request_body_bytes: 1048576
+  read_header_timeout: "5s"
+  read_timeout: "10s"
+  write_timeout: "30s"
+  idle_timeout: "1m"
   auth:
     bootstrap_token: "${env:KRONOS_BOOTSTRAP_TOKEN}"
     token_verify_rate_limit: 10
@@ -50,6 +55,9 @@ server:
 user and token stores are empty. Set it for any non-local deployment, pass the
 same value to `kronos user bootstrap --bootstrap-token`, then rotate/remove the
 environment secret after the initial admin token is safely stored.
+`max_request_body_bytes` caps mutating control-plane request bodies before JSON
+decoding; timeout fields map directly to Go HTTP server read-header, read,
+write, and idle timeouts.
 
 Monitor `kronos_auth_rate_limited_total` on `/metrics` for rejected token
 verification attempts. A steady increase usually means callers need backoff,

@@ -99,6 +99,11 @@ func TestValidateAuthRateLimitSettings(t *testing.T) {
 	valid := base
 	valid.Server.Auth.TokenVerifyRateLimit = 3
 	valid.Server.Auth.TokenVerifyRateWindow = "30s"
+	valid.Server.MaxRequestBodyBytes = 2 << 20
+	valid.Server.ReadHeaderTimeout = "5s"
+	valid.Server.ReadTimeout = "10s"
+	valid.Server.WriteTimeout = "30s"
+	valid.Server.IdleTimeout = "1m"
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("Validate(valid auth rate limit) error = %v", err)
 	}
@@ -113,6 +118,24 @@ func TestValidateAuthRateLimitSettings(t *testing.T) {
 	badWindow.Server.Auth.TokenVerifyRateWindow = "soon"
 	if err := badWindow.Validate(); err == nil || !strings.Contains(err.Error(), "token_verify_rate_window") {
 		t.Fatalf("Validate(bad window) error = %v, want token_verify_rate_window", err)
+	}
+
+	negativeBodyLimit := base
+	negativeBodyLimit.Server.MaxRequestBodyBytes = -1
+	if err := negativeBodyLimit.Validate(); err == nil || !strings.Contains(err.Error(), "max_request_body_bytes") {
+		t.Fatalf("Validate(negative body limit) error = %v, want max_request_body_bytes", err)
+	}
+
+	badTimeout := base
+	badTimeout.Server.ReadTimeout = "soon"
+	if err := badTimeout.Validate(); err == nil || !strings.Contains(err.Error(), "read_timeout") {
+		t.Fatalf("Validate(bad read timeout) error = %v, want read_timeout", err)
+	}
+
+	zeroTimeout := base
+	zeroTimeout.Server.WriteTimeout = "0s"
+	if err := zeroTimeout.Validate(); err == nil || !strings.Contains(err.Error(), "write_timeout") {
+		t.Fatalf("Validate(zero write timeout) error = %v, want write_timeout", err)
 	}
 }
 

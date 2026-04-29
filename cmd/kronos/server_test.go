@@ -3985,6 +3985,71 @@ func TestServeControlPlaneStopsOnContextCancel(t *testing.T) {
 	}
 }
 
+func TestServerRequestBodyLimit(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Server: config.ServerConfig{MaxRequestBodyBytes: 64}}
+	server := httptest.NewServer(newServerHandlerWithStoresAuth(cfg, nil, apiStores{}, true))
+	defer server.Close()
+
+	resp, err := server.Client().Post(server.URL+"/api/v1/targets", "application/json", strings.NewReader(`{"id":"target-1","name":"redis","driver":"redis","endpoint":"127.0.0.1:6379"}`))
+	if err != nil {
+		t.Fatalf("POST small target error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("POST small configured-over-limit target status = %d, want 413", resp.StatusCode)
+	}
+
+	var body struct {
+		Error struct {
+			Code    string `json:"code"`
+			Status  int    `json:"status"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	resp, err = server.Client().Post(server.URL+"/api/v1/targets", "application/json", strings.NewReader(strings.Repeat("x", 128)))
+	if err != nil {
+		t.Fatalf("POST oversized target error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("POST oversized target status = %d, want 413", resp.StatusCode)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("Decode(oversized error) error = %v", err)
+	}
+	if body.Error.Status != http.StatusRequestEntityTooLarge || body.Error.Code != "request_entity_too_large" || !strings.Contains(body.Error.Message, "64 bytes") {
+		t.Fatalf("oversized error = %#v", body.Error)
+	}
+}
+
+func TestServerTimeoutSettings(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Server: config.ServerConfig{
+		ReadHeaderTimeout: "2s",
+		ReadTimeout:       "3s",
+		WriteTimeout:      "4s",
+		IdleTimeout:       "5s",
+	}}
+	if got := serverDuration(cfg, "read_header_timeout", defaultReadHeaderTimeout); got != 2*time.Second {
+		t.Fatalf("read header timeout = %s, want 2s", got)
+	}
+	if got := serverDuration(cfg, "read_timeout", defaultReadTimeout); got != 3*time.Second {
+		t.Fatalf("read timeout = %s, want 3s", got)
+	}
+	if got := serverDuration(cfg, "write_timeout", defaultWriteTimeout); got != 4*time.Second {
+		t.Fatalf("write timeout = %s, want 4s", got)
+	}
+	if got := serverDuration(cfg, "idle_timeout", defaultIdleTimeout); got != 5*time.Second {
+		t.Fatalf("idle timeout = %s, want 5s", got)
+	}
+	if got := maxRequestBodyBytes(&config.Config{Server: config.ServerConfig{MaxRequestBodyBytes: 1234}}); got != 1234 {
+		t.Fatalf("max request body bytes = %d, want 1234", got)
+	}
+}
+
 func TestServerRejectsBadRequestsAndMethods(t *testing.T) {
 	t.Parallel()
 

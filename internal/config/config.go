@@ -22,12 +22,17 @@ type Config struct {
 
 // ServerConfig configures the control-plane server.
 type ServerConfig struct {
-	Listen           string     `json:"listen" yaml:"listen"`
-	ListenWebUI      string     `json:"listen_webui,omitempty" yaml:"listen_webui,omitempty"`
-	DataDir          string     `json:"data_dir" yaml:"data_dir"`
-	TLS              TLSConfig  `json:"tls,omitempty" yaml:"tls,omitempty"`
-	Auth             AuthConfig `json:"auth,omitempty" yaml:"auth,omitempty"`
-	MasterPassphrase string     `json:"master_passphrase,omitempty" yaml:"master_passphrase,omitempty"`
+	Listen              string     `json:"listen" yaml:"listen"`
+	ListenWebUI         string     `json:"listen_webui,omitempty" yaml:"listen_webui,omitempty"`
+	DataDir             string     `json:"data_dir" yaml:"data_dir"`
+	TLS                 TLSConfig  `json:"tls,omitempty" yaml:"tls,omitempty"`
+	Auth                AuthConfig `json:"auth,omitempty" yaml:"auth,omitempty"`
+	MasterPassphrase    string     `json:"master_passphrase,omitempty" yaml:"master_passphrase,omitempty"`
+	MaxRequestBodyBytes int64      `json:"max_request_body_bytes,omitempty" yaml:"max_request_body_bytes,omitempty"`
+	ReadHeaderTimeout   string     `json:"read_header_timeout,omitempty" yaml:"read_header_timeout,omitempty"`
+	ReadTimeout         string     `json:"read_timeout,omitempty" yaml:"read_timeout,omitempty"`
+	WriteTimeout        string     `json:"write_timeout,omitempty" yaml:"write_timeout,omitempty"`
+	IdleTimeout         string     `json:"idle_timeout,omitempty" yaml:"idle_timeout,omitempty"`
 }
 
 // TLSConfig holds mTLS file paths.
@@ -184,6 +189,27 @@ func (c Config) Validate() error {
 	}
 	if c.Server.Auth.TokenVerifyRateLimit < 0 {
 		errs = append(errs, errors.New("server.auth.token_verify_rate_limit must be non-negative"))
+	}
+	if c.Server.MaxRequestBodyBytes < 0 {
+		errs = append(errs, errors.New("server.max_request_body_bytes must be non-negative"))
+	}
+	for field, value := range map[string]string{
+		"server.read_header_timeout": c.Server.ReadHeaderTimeout,
+		"server.read_timeout":        c.Server.ReadTimeout,
+		"server.write_timeout":       c.Server.WriteTimeout,
+		"server.idle_timeout":        c.Server.IdleTimeout,
+	} {
+		if value == "" {
+			continue
+		}
+		duration, err := time.ParseDuration(value)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", field, err))
+			continue
+		}
+		if duration <= 0 {
+			errs = append(errs, fmt.Errorf("%s must be positive", field))
+		}
 	}
 	if c.Server.Auth.TokenVerifyRateWindow != "" {
 		if _, err := time.ParseDuration(c.Server.Auth.TokenVerifyRateWindow); err != nil {

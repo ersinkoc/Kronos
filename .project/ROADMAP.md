@@ -42,7 +42,7 @@ Kronos has a strong core: CLI, HTTP control plane, agent worker, persistent KV s
 - [x] Add CLI secret-reference helper flags and API placeholder validation for deployments that require secret-manager-backed credentials.
 - [x] Normalize JSON error response format across all REST handlers.
 - [x] Add broad input validation for resource IDs, URI schemes, cron expressions, and option schemas.
-- [ ] Add request/body size limits and timeouts to API handlers.
+- [x] Add request/body size limits and timeouts to API handlers.
 - [ ] Add CORS policy only if browser origins beyond same-origin are supported.
 
 ## Phase 4: Testing (Week 9-10)
