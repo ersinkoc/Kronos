@@ -40,6 +40,7 @@ type TLSConfig struct {
 // AuthConfig configures server authentication.
 type AuthConfig struct {
 	OIDC                  OIDCConfig `json:"oidc,omitempty" yaml:"oidc,omitempty"`
+	BootstrapToken        string     `json:"bootstrap_token,omitempty" yaml:"bootstrap_token,omitempty"`
 	TokenVerifyRateLimit  int        `json:"token_verify_rate_limit,omitempty" yaml:"token_verify_rate_limit,omitempty"`
 	TokenVerifyRateWindow string     `json:"token_verify_rate_window,omitempty" yaml:"token_verify_rate_window,omitempty"`
 }

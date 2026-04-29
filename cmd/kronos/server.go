@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -795,6 +796,9 @@ func newServerHandlerWithStoresAuth(cfg *config.Config, registry *control.AgentR
 	})
 	mux.HandleFunc("/api/v1/bootstrap/admin", func(w http.ResponseWriter, r *http.Request) {
 		if !allowMethods(w, r, http.MethodPost) {
+			return
+		}
+		if !requireBootstrapToken(w, r, cfg) {
 			return
 		}
 		bootstrapMu.Lock()
@@ -2300,6 +2304,26 @@ type bootstrapAdminRequest struct {
 type bootstrapAdminResponse struct {
 	User  core.User            `json:"user"`
 	Token control.CreatedToken `json:"token"`
+}
+
+func requireBootstrapToken(w http.ResponseWriter, r *http.Request, cfg *config.Config) bool {
+	expected := ""
+	if cfg != nil {
+		expected = strings.TrimSpace(cfg.Server.Auth.BootstrapToken)
+	}
+	if expected == "" {
+		return true
+	}
+	got := strings.TrimSpace(r.Header.Get("X-Kronos-Bootstrap-Token"))
+	if got == "" {
+		http.Error(w, "bootstrap token is required", http.StatusUnauthorized)
+		return false
+	}
+	if subtle.ConstantTimeCompare([]byte(got), []byte(expected)) != 1 {
+		http.Error(w, "invalid bootstrap token", http.StatusUnauthorized)
+		return false
+	}
+	return true
 }
 
 func handleBootstrapAdmin(w http.ResponseWriter, r *http.Request, users *control.UserStore, tokens *control.TokenStore, auditLog *kaudit.Log) {

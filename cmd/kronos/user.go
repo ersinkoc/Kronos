@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/kronos/kronos/internal/core"
 )
@@ -38,6 +40,7 @@ func runUserBootstrap(ctx context.Context, out io.Writer, args []string) error {
 	email := fs.String("email", "", "admin user email")
 	displayName := fs.String("display-name", "", "admin display name")
 	tokenName := fs.String("token-name", "initial-admin", "initial admin token name")
+	bootstrapToken := fs.String("bootstrap-token", os.Getenv("KRONOS_BOOTSTRAP_TOKEN"), "one-time bootstrap token")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -53,7 +56,9 @@ func runUserBootstrap(ctx context.Context, out io.Writer, args []string) error {
 		"display_name": *displayName,
 		"token_name":   *tokenName,
 	}
-	return postControlJSON(ctx, http.DefaultClient, *serverAddr, "/api/v1/bootstrap/admin", payload, out)
+	return postControlJSONWithHeaders(ctx, http.DefaultClient, *serverAddr, "/api/v1/bootstrap/admin", payload, map[string]string{
+		"X-Kronos-Bootstrap-Token": strings.TrimSpace(*bootstrapToken),
+	}, out)
 }
 
 func runUserAdd(ctx context.Context, out io.Writer, args []string) error {

@@ -39,6 +39,9 @@ func TestRunUserAddListInspectGrantRemove(t *testing.T) {
 			if r.Method != http.MethodPost {
 				t.Fatalf("user bootstrap method = %s", r.Method)
 			}
+			if r.Header.Get("X-Kronos-Bootstrap-Token") != "setup-secret" {
+				t.Fatalf("bootstrap token header = %q", r.Header.Get("X-Kronos-Bootstrap-Token"))
+			}
 			defer r.Body.Close()
 			var body bytes.Buffer
 			if _, err := body.ReadFrom(r.Body); err != nil {
@@ -73,7 +76,7 @@ func TestRunUserAddListInspectGrantRemove(t *testing.T) {
 	defer server.Close()
 
 	var out bytes.Buffer
-	if err := run(context.Background(), &out, []string{"user", "bootstrap", "--server", server.URL, "--id", "admin", "--email", "admin@example.com", "--display-name", "Admin", "--token-name", "setup"}); err != nil {
+	if err := run(context.Background(), &out, []string{"user", "bootstrap", "--server", server.URL, "--id", "admin", "--email", "admin@example.com", "--display-name", "Admin", "--token-name", "setup", "--bootstrap-token", "setup-secret"}); err != nil {
 		t.Fatalf("user bootstrap error = %v", err)
 	}
 	if !strings.Contains(out.String(), `"secret":"kro_secret"`) {

@@ -183,13 +183,18 @@ user and token stores are empty. After that, the server enforces exact scopes
 plus `resource:*`, `admin:*`, or `*`.
 
 ```bash
-./bin/kronos user bootstrap --id admin --email admin@example.com --display-name Admin --token-name initial-admin
+export KRONOS_BOOTSTRAP_TOKEN=<random-one-time-bootstrap-secret>
+./bin/kronos user bootstrap --id admin --email admin@example.com --display-name Admin --token-name initial-admin --bootstrap-token "$KRONOS_BOOTSTRAP_TOKEN"
 export KRONOS_TOKEN=<copy-once-admin-secret>
 ./bin/kronos token create --user admin --name ci --scope backup:read,backup:write
 export KRONOS_TOKEN=<copy-once-ci-secret>
 ./bin/kronos token verify
 ./bin/kronos --server http://127.0.0.1:8500 --token "$KRONOS_TOKEN" backup list
 ```
+
+For non-local deployments, configure `server.auth.bootstrap_token` before the
+first bootstrap and pass the same value through `--bootstrap-token` or
+`KRONOS_BOOTSTRAP_TOKEN`.
 
 After rotating credentials, preview and prune inactive token metadata:
 

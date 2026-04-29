@@ -252,6 +252,10 @@ func runBackupVerify(ctx context.Context, out io.Writer, args []string) error {
 }
 
 func postControlJSON(ctx context.Context, client *http.Client, serverAddr string, path string, payload any, out io.Writer) error {
+	return postControlJSONWithHeaders(ctx, client, serverAddr, path, payload, nil, out)
+}
+
+func postControlJSONWithHeaders(ctx context.Context, client *http.Client, serverAddr string, path string, payload any, headers map[string]string, out io.Writer) error {
 	serverAddr = controlServerAddr(ctx, serverAddr)
 	var body bytes.Buffer
 	if err := json.NewEncoder(&body).Encode(payload); err != nil {
@@ -266,6 +270,11 @@ func postControlJSON(ctx context.Context, client *http.Client, serverAddr string
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	for name, value := range headers {
+		if strings.TrimSpace(value) != "" {
+			req.Header.Set(name, value)
+		}
+	}
 	setControlAuth(ctx, req)
 	return doControlRequest(client, req, out)
 }

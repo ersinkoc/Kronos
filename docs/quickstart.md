@@ -32,6 +32,7 @@ go build -trimpath \
 ./bin/kronos keygen --key-id local-dev
 export KRONOS_MANIFEST_PRIVATE_KEY=<ed25519-private-key-hex>
 export KRONOS_CHUNK_KEY=<32-byte-hex-key>
+export KRONOS_BOOTSTRAP_TOKEN=<random-one-time-bootstrap-secret>
 ```
 
 Keep the printed public key. It is needed for offline manifest verification.
@@ -61,7 +62,8 @@ Bootstrap the first admin user and copy-once admin token:
   --id admin \
   --email admin@example.com \
   --display-name Admin \
-  --token-name local-cli
+  --token-name local-cli \
+  --bootstrap-token "$KRONOS_BOOTSTRAP_TOKEN"
 export KRONOS_TOKEN=<copy-once-secret>
 ./bin/kronos token verify
 ```
@@ -69,7 +71,9 @@ export KRONOS_TOKEN=<copy-once-secret>
 From this point on, the CLI sends the token automatically when
 `KRONOS_TOKEN` is set. The bootstrap endpoint only works while both the user
 and token stores are empty; later user and token changes require normal admin
-authorization.
+authorization. For non-local deployments, set `server.auth.bootstrap_token` in
+the config, preferably through an environment placeholder, and keep the server
+bound privately until this step is complete.
 
 ## 5. Add Resources
 

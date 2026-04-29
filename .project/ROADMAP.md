@@ -33,7 +33,7 @@ Kronos has a strong core: CLI, HTTP control plane, agent worker, persistent KV s
 
 ### Security, error handling, edge cases
 
-- [x] Add first-admin bootstrap for empty user/token stores.
+- [x] Add first-admin bootstrap for empty user/token stores, with optional bootstrap-token protection for non-local deployments.
 - [ ] Add password hashing and role enforcement beyond token scopes.
 - [ ] Add TOTP for admin or remove that claim from MVP docs.
 - [ ] Add TLS/mTLS deployment path and secure agent enrollment.

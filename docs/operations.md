@@ -41,9 +41,15 @@ For public or shared control planes, set token verification throttling in
 ```yaml
 server:
   auth:
+    bootstrap_token: "${env:KRONOS_BOOTSTRAP_TOKEN}"
     token_verify_rate_limit: 10
     token_verify_rate_window: "1m"
 ```
+
+`bootstrap_token` is only used by the first-admin bootstrap endpoint while the
+user and token stores are empty. Set it for any non-local deployment, pass the
+same value to `kronos user bootstrap --bootstrap-token`, then rotate/remove the
+environment secret after the initial admin token is safely stored.
 
 Monitor `kronos_auth_rate_limited_total` on `/metrics` for rejected token
 verification attempts. A steady increase usually means callers need backoff,

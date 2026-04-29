@@ -1758,6 +1758,49 @@ func TestServerBootstrapAdminCreatesFirstUserAndToken(t *testing.T) {
 	}
 }
 
+func TestServerBootstrapAdminRequiresConfiguredBootstrapToken(t *testing.T) {
+	t.Parallel()
+
+	db, err := kvstore.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+	stores, err := newAPIStores(db)
+	if err != nil {
+		t.Fatalf("newAPIStores() error = %v", err)
+	}
+	cfg := &config.Config{Server: config.ServerConfig{Auth: config.AuthConfig{BootstrapToken: "setup-secret"}}}
+	server := httptest.NewServer(newServerHandlerWithStoresAuth(cfg, nil, stores, false))
+	defer server.Close()
+
+	for _, tc := range []struct {
+		name   string
+		header string
+		status int
+	}{
+		{name: "missing", status: http.StatusUnauthorized},
+		{name: "wrong", header: "wrong-secret", status: http.StatusUnauthorized},
+		{name: "valid", header: "setup-secret", status: http.StatusOK},
+	} {
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/api/v1/bootstrap/admin", strings.NewReader(`{"id":"admin","email":"admin@example.com","display_name":"Admin"}`))
+		if err != nil {
+			t.Fatalf("NewRequest(%s) error = %v", tc.name, err)
+		}
+		if tc.header != "" {
+			req.Header.Set("X-Kronos-Bootstrap-Token", tc.header)
+		}
+		resp, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatalf("POST bootstrap %s error = %v", tc.name, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != tc.status {
+			t.Fatalf("POST bootstrap %s status = %d, want %d", tc.name, resp.StatusCode, tc.status)
+		}
+	}
+}
+
 func TestServerJobsEndpoint(t *testing.T) {
 	t.Parallel()
 
