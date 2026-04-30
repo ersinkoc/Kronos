@@ -210,9 +210,9 @@ Critical paths needing more coverage: corrupted/missing chunks, broader auth byp
 - [x] CLI docs exist.
 - [x] Architecture and status docs exist.
 - [x] Production readiness doc exists.
-- [ ] Docs conflict with original spec and sometimes overstate readiness.
-- [ ] No changelog.
-- [ ] No rendered API reference.
+- [x] Implemented-path and full-product readiness docs are split.
+- [x] Changelog exists.
+- [x] Rendered API reference exists.
 
 ## 9. Final Verdict
 

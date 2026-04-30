@@ -76,10 +76,10 @@ Kronos has a strong core: CLI, HTTP control plane, agent worker, persistent KV s
 
 - [x] Update public README/spec claims to match actual driver behavior.
 - [x] Add `CHANGELOG.md`.
-- [ ] Generate rendered API docs from `api/openapi/openapi.yaml`.
-- [ ] Split production readiness docs into implemented-path readiness vs full-product readiness.
-- [ ] Add troubleshooting guide for token scopes, agent claims, storage credentials, and restore failures.
-- [ ] Add architecture decision records for shell-out driver MVP, HTTP polling vs gRPC, and secret storage.
+- [x] Generate rendered API docs from `api/openapi/openapi.yaml`.
+- [x] Split production readiness docs into implemented-path readiness vs full-product readiness.
+- [x] Add troubleshooting guide for token scopes, agent claims, storage credentials, and restore failures.
+- [x] Add architecture decision records for shell-out driver MVP, HTTP polling vs gRPC, and secret storage.
 
 ## Phase 7: Release Preparation (Week 15-16)
 

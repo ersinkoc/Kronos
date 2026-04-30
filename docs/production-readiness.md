@@ -2,6 +2,12 @@
 
 Last reviewed from the repository state on April 30, 2026.
 
+This page is the combined assessment. Use the split readiness tracks when
+deciding whether a deployment is in scope:
+
+- [Implemented-path production readiness](production-readiness-implemented.md)
+- [Full-product production readiness](production-readiness-full-product.md)
+
 Kronos is close to production-ready for the implemented Redis or Valkey backup
 path with local or S3-compatible storage. A PostgreSQL logical backup/restore
 MVP is now present through `pg_dump` and `psql`, with worker/control-plane/local
