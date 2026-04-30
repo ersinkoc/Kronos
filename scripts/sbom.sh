@@ -12,8 +12,9 @@ mkdir -p "$(dirname "$out")"
 tmp="$out.tmp"
 {
 	printf '{\n'
-	printf '  "bomFormat": "kronos-go-modules",\n'
-	printf '  "specVersion": "1.0",\n'
+	printf '  "bomFormat": "CycloneDX",\n'
+	printf '  "specVersion": "1.5",\n'
+	printf '  "version": 1,\n'
 	printf '  "metadata": {\n'
 	printf '    "component": {"type": "application", "name": "kronos", "version": "%s"},\n' "$version"
 	printf '    "commit": "%s",\n' "$commit"

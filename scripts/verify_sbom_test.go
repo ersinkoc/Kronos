@@ -61,7 +61,8 @@ func TestVerifySBOMFailsWhenModuleIsMissing(t *testing.T) {
 	root := filepath.Dir(mustGetwd(t))
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "kronos-sbom.json"), []byte(`{
-  "bomFormat": "kronos-go-modules",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
   "components": []
 }`), 0o644); err != nil {
 		t.Fatalf("WriteFile(kronos-sbom.json) error = %v", err)

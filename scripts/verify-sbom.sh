@@ -28,7 +28,8 @@ require_text() {
 	fi
 }
 
-require_text '"bomFormat": "kronos-go-modules"' "kronos module format marker"
+require_text '"bomFormat": "CycloneDX"' "CycloneDX format marker"
+require_text '"specVersion": "1.5"' "CycloneDX spec version"
 require_text '"components": [' "component list"
 
 missing="$(mktemp)"
