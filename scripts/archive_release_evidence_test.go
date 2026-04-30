@@ -48,6 +48,37 @@ func TestArchiveReleaseEvidenceCapturesVerificationLogs(t *testing.T) {
 	if err := os.WriteFile(fakeCosign, []byte(fake), 0o755); err != nil {
 		t.Fatalf("WriteFile(fake cosign) error = %v", err)
 	}
+	fakeGit := filepath.Join(binDir, "git")
+	gitScript := `#!/usr/bin/env sh
+set -eu
+case "$1" in
+	rev-parse)
+		if [ "$2" = "--git-dir" ]; then
+			printf '%s\n' .git
+			exit 0
+		fi
+		if [ "$2" = "--short" ]; then
+			printf '%s\n' abc1234
+			exit 0
+		fi
+		if [ "$2" = "-q" ] && [ "$3" = "--verify" ]; then
+			exit 0
+		fi
+		;;
+	ls-remote)
+		exit 0
+		;;
+	verify-tag)
+		printf '%s\n' "tag OK"
+		exit 0
+		;;
+esac
+echo "unexpected git invocation: $*" >&2
+exit 1
+`
+	if err := os.WriteFile(fakeGit, []byte(gitScript), 0o755); err != nil {
+		t.Fatalf("WriteFile(fake git) error = %v", err)
+	}
 
 	cmd := exec.Command("sh", filepath.Join(root, "scripts", "archive-release-evidence.sh"), releaseDir, evidenceDir)
 	cmd.Dir = root
@@ -60,7 +91,7 @@ func TestArchiveReleaseEvidenceCapturesVerificationLogs(t *testing.T) {
 		t.Fatalf("archive-release-evidence.sh error = %v\n%s", err, output)
 	}
 
-	for _, name := range []string{"checksum.log", "signatures.log", "attestations.log", "artifact-digests.txt", "summary.txt"} {
+	for _, name := range []string{"checksum.log", "signatures.log", "tag-signature.log", "attestations.log", "artifact-digests.txt", "summary.txt"} {
 		path := filepath.Join(evidenceDir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -76,6 +107,7 @@ func TestArchiveReleaseEvidenceCapturesVerificationLogs(t *testing.T) {
 	}
 	if !strings.Contains(string(summary), "checksum_log=checksum.log") ||
 		!strings.Contains(string(summary), "signature_log=signatures.log") ||
+		!strings.Contains(string(summary), "tag_signature_log=tag-signature.log") ||
 		!strings.Contains(string(summary), "release_tag=v0.0.0-test") ||
 		!strings.Contains(string(summary), "attestation_log=attestations.log") {
 		t.Fatalf("summary missing expected log references:\n%s", summary)

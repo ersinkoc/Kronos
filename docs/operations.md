@@ -429,6 +429,9 @@ groups:
      ./scripts/archive-release-evidence.sh bin release-evidence/v1.2.3
    ```
 
+   Set `KRONOS_RELEASE_TAG=v1.2.3` when archiving a promoted release so the
+   evidence directory includes `tag-signature.log` from `git verify-tag`.
+
 3. Drain new work by pausing schedules that should not run during the upgrade:
 
    ```bash

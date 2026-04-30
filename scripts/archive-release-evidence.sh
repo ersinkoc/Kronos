@@ -23,6 +23,11 @@ run_and_capture() {
 
 run_and_capture checksum ./scripts/verify-release.sh "$release_dir"
 run_and_capture signatures ./scripts/verify-signatures.sh "$release_dir"
+if [ "$release_tag" != "unknown" ]; then
+	run_and_capture tag-signature ./scripts/verify-release-tag.sh "$release_tag"
+else
+	printf '%s\n' "KRONOS_RELEASE_TAG not set; release tag signature verification not run." >"$evidence_dir/tag-signature.log"
+fi
 
 digests="$evidence_dir/artifact-digests.txt"
 : >"$digests"
@@ -82,6 +87,7 @@ summary="$evidence_dir/summary.txt"
 	echo "verified_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 	echo "checksum_log=checksum.log"
 	echo "signature_log=signatures.log"
+	echo "tag_signature_log=tag-signature.log"
 	echo "attestation_log=attestations.log"
 	echo "digests=artifact-digests.txt"
 } >"$summary"

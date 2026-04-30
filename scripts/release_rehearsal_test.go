@@ -67,6 +67,37 @@ exit 1
 	if err := os.WriteFile(fakeCosign, []byte("#!/usr/bin/env sh\necho cosign \"$@\"\n"), 0o755); err != nil {
 		t.Fatalf("WriteFile(fake cosign) error = %v", err)
 	}
+	fakeGit := filepath.Join(binDir, "git")
+	gitScript := `#!/usr/bin/env sh
+set -eu
+case "$1" in
+	rev-parse)
+		if [ "$2" = "--git-dir" ]; then
+			printf '%s\n' .git
+			exit 0
+		fi
+		if [ "$2" = "--short" ]; then
+			printf '%s\n' abc1234
+			exit 0
+		fi
+		if [ "$2" = "-q" ] && [ "$3" = "--verify" ]; then
+			exit 0
+		fi
+		;;
+	ls-remote)
+		exit 0
+		;;
+	verify-tag)
+		printf '%s\n' "tag OK"
+		exit 0
+		;;
+esac
+echo "unexpected git invocation: $*" >&2
+exit 1
+`
+	if err := os.WriteFile(fakeGit, []byte(gitScript), 0o755); err != nil {
+		t.Fatalf("WriteFile(fake git) error = %v", err)
+	}
 
 	cmd := exec.Command("sh", filepath.Join(root, "scripts", "release-rehearsal.sh"), "v0.0.0-test", workspace)
 	cmd.Dir = root
@@ -85,6 +116,7 @@ exit 1
 		t.Fatalf("ReadFile(summary) error = %v", err)
 	}
 	if !strings.Contains(string(summary), "release_tag=v0.0.0-test") ||
+		!strings.Contains(string(summary), "tag_signature_log=tag-signature.log") ||
 		!strings.Contains(string(summary), "attestation_log=attestations.log") {
 		t.Fatalf("summary missing release rehearsal metadata:\n%s", summary)
 	}
