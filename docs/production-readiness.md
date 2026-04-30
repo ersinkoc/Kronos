@@ -58,7 +58,7 @@ fully production-grade.
 | --- | ---: | --- |
 | Implemented Redis/local/S3 path | 95% | Core pipeline, TLS/mTLS-capable agent/control-plane transport, lost-agent recovery, server restart recovery, restore planning, retention, notifications, schedule hooks, audit, metrics, release scripts, single-replica Kubernetes examples with EKS/GKE/AKS overlays, runbooks, a reusable production gate, and tagged worker/control-plane/Redis backup, restore, hook, retention apply, and recovery E2E tests are in place. |
 | Broad multi-database product vision | 96% | Redis is executable, PostgreSQL now has a plain SQL logical driver MVP, optional global role metadata capture, full global restore coverage, worker pipeline smoke E2E coverage, CI conformance coverage across PostgreSQL 15, 16, and 17, a PostgreSQL 15-to-17 restore rehearsal, and a 10,000-row PostgreSQL restore drill. MySQL/MariaDB now has a `mysqldump`/`mysql` logical MVP with unit coverage, real-service MySQL 8.4 and MariaDB 11.4 conformance, bidirectional MySQL/MariaDB restore rehearsal coverage, and 10,000-row MySQL/MariaDB restore drills. MongoDB now has a `mongodump`/`mongorestore` archive MVP with unit coverage, authenticated real-service MongoDB 7.0/8.0 conformance, failed restore cleanup coverage, an authenticated MongoDB 7.0 10,000-document restore drill, and a MongoDB 7.0 replica-set/oplog recovery drill, while storage backends, WebUI workflows, native MongoDB oplog streaming, and multi-instance deployment patterns remain roadmap work. |
-| Current repository release hygiene | 99% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, SBOM module verification, GitHub build/SBOM attestations, keyless cosign signatures and verification, signed-tag preflight/verification scripts, consumer release verification docs, CI govulncheck, release-gated SBOM vulnerability verification, release artifact smoke checks, missing/corrupted chunk verification failure drills, notification fan-out and hook execution tests, PostgreSQL full global restore, PostgreSQL operator-scale restore, MySQL, MariaDB, bidirectional MySQL/MariaDB restore rehearsal conformance, 10,000-row MySQL/MariaDB restore drills, authenticated MongoDB 7.0/8.0 service conformance, authenticated MongoDB 7.0 operator-scale restore drill, MongoDB 7.0 replica-set/oplog recovery drill, the production check script, tagged backup/restore/hook/retention/recovery E2E coverage, and Node 24-native GitHub Actions are present. The `golang.org/x/crypto` advisories are fixed. |
+| Current repository release hygiene | 99% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, SBOM module verification, GitHub build/SBOM attestations, keyless cosign signatures and verification, signed-tag preflight/verification scripts, consumer release verification docs, CI govulncheck, release-gated SBOM vulnerability verification, release artifact smoke checks, missing/corrupted chunk verification failure drills, notification fan-out and hook execution tests, PostgreSQL full global restore, PostgreSQL operator-scale restore, MySQL, MariaDB, bidirectional MySQL/MariaDB restore rehearsal conformance, 10,000-row MySQL/MariaDB restore drills, authenticated MongoDB 7.0/8.0 service conformance, authenticated MongoDB 7.0 operator-scale restore drill, MongoDB 7.0 replica-set/oplog recovery drill, the production check script, tagged backup/restore/hook/retention/recovery E2E coverage, and Node 24-native GitHub Actions are present. A signed rehearsal tag has been verified, but production tag workflows still require the `KRONOS_RELEASE_TAG_PUBLIC_KEY` repository secret. The `golang.org/x/crypto` advisories are fixed. |
 
 ## Current Release Gate
 
@@ -192,11 +192,13 @@ run.
    service-level failure scenarios.
 2. Add deeper verification drill evidence, including failure-injection
    scenarios beyond the current agent-level missing/corrupted chunk drills.
-3. Run at least one signed-tag release rehearsal against a disposable version
-   tag and archive the verification evidence.
+3. Set the `KRONOS_RELEASE_TAG_PUBLIC_KEY` repository secret to the trusted
+   armored public GPG key for the release tag signer, then run one more signed
+   rehearsal or production tag to validate the release workflow evidence upload
+   path.
 
 ## Next Engineering Slices
 
-1. Configure a local GPG signing key, run `check-release-signing.sh`, push a
-   disposable signed tag, verify it with `verify-release-tag.sh`, and archive
-   checksum, signature, tag signature, and attestation verification evidence.
+1. Run `check-release-workflow-prereqs.sh` after the
+   `KRONOS_RELEASE_TAG_PUBLIC_KEY` repository secret is configured, then cut the
+   next signed rehearsal or production tag.

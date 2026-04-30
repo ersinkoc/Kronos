@@ -200,6 +200,7 @@ broad multi-database production suite. The largest remaining areas are:
 
 ## Next Best Work
 
-1. Configure a local GPG signing key, run `check-release-signing.sh`, push a
-   disposable signed tag, verify it with `verify-release-tag.sh`, and archive
-   checksum, signature, tag signature, and attestation verification evidence.
+1. Set the `KRONOS_RELEASE_TAG_PUBLIC_KEY` repository secret to the trusted
+   armored public GPG key for the release tag signer, run
+   `check-release-workflow-prereqs.sh`, and cut the next signed rehearsal or
+   production tag to exercise the release workflow evidence upload path.
