@@ -201,6 +201,7 @@ broad multi-database production suite. The largest remaining areas are:
 ## Next Best Work
 
 1. Set the `KRONOS_RELEASE_TAG_PUBLIC_KEY` repository secret to the trusted
-   armored public GPG key for the release tag signer, run
+   armored public GPG key for release tag signer
+   `5A9E4321B35B583DAFE3DC11F9936A44B1CF413C`, run
    `check-release-workflow-prereqs.sh`, and cut the next signed rehearsal or
    production tag to exercise the release workflow evidence upload path.

@@ -411,7 +411,9 @@ freshness, capacity, and token cleanup thresholds to match the deployment.
    locally or on `origin`, or a temporary signed probe tag cannot be created and
    verified. Also run `./scripts/check-release-workflow-prereqs.sh`; it fails if
    the `KRONOS_RELEASE_TAG_PUBLIC_KEY` repository secret needed by release
-   evidence archival is missing. The `release` workflow runs the full Go test
+   evidence archival is missing. That secret must contain the trusted armored
+   public GPG key for release tag signer
+   `5A9E4321B35B583DAFE3DC11F9936A44B1CF413C`. The `release` workflow runs the full Go test
    suite, builds the default linux/darwin amd64/arm64 binaries through
    `scripts/release.sh`, verifies all checksums, writes
    `bin/kronos-provenance.json` and `bin/kronos-sbom.json`, signs binaries plus

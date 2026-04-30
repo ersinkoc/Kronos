@@ -19,7 +19,8 @@ This confirms `user.signingkey` is configured, the matching GPG secret key is
 available, the tag is not already present locally or on `origin`, and a
 temporary signed probe tag can be created and verified. The workflow preflight
 confirms the tagged-release workflow can import the trusted tag-signing public
-key from `KRONOS_RELEASE_TAG_PUBLIC_KEY`.
+key from `KRONOS_RELEASE_TAG_PUBLIC_KEY`. The expected release tag signer
+fingerprint is `5A9E4321B35B583DAFE3DC11F9936A44B1CF413C`.
 
 After pushing the release tag, verify the signed tag object from `origin`:
 
@@ -31,8 +32,8 @@ This fetches the tag if needed and runs `git verify-tag` so the release evidence
 can distinguish "tag exists" from "tag signature verified".
 Tagged GitHub release runs also require the repository secret
 `KRONOS_RELEASE_TAG_PUBLIC_KEY` to contain the trusted armored public GPG key for
-the release tag signer. The release workflow imports that key before archiving
-and uploading release evidence.
+release tag signer `5A9E4321B35B583DAFE3DC11F9936A44B1CF413C`. The release
+workflow imports that key before archiving and uploading release evidence.
 
 Download the release assets for the target platform into one directory:
 

@@ -29,7 +29,7 @@ exit 1
 
 	cmd := exec.Command("sh", filepath.Join(root, "scripts", "check-release-workflow-prereqs.sh"))
 	cmd.Dir = root
-	cmd.Env = append(cleanEnv(os.Environ(), "GH_RELEASE_REPO", "GITHUB_REPOSITORY", "KRONOS_RELEASE_TAG_PUBLIC_KEY_SECRET"),
+	cmd.Env = append(cleanEnv(os.Environ(), "GH_RELEASE_REPO", "GITHUB_REPOSITORY", "KRONOS_RELEASE_TAG_PUBLIC_KEY_SECRET", "KRONOS_RELEASE_TAG_SIGNER_FINGERPRINT"),
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"GH_RELEASE_REPO=ersinkoc/Kronos",
 	)
@@ -39,6 +39,9 @@ exit 1
 	}
 	if !strings.Contains(string(output), "GitHub secret missing for tagged releases: KRONOS_RELEASE_TAG_PUBLIC_KEY in ersinkoc/Kronos") {
 		t.Fatalf("missing secret error not found:\n%s", output)
+	}
+	if !strings.Contains(string(output), "5A9E4321B35B583DAFE3DC11F9936A44B1CF413C") {
+		t.Fatalf("signer fingerprint missing from error:\n%s", output)
 	}
 }
 
@@ -63,7 +66,7 @@ exit 1
 
 	cmd := exec.Command("sh", filepath.Join(root, "scripts", "check-release-workflow-prereqs.sh"))
 	cmd.Dir = root
-	cmd.Env = append(cleanEnv(os.Environ(), "GH_RELEASE_REPO", "GITHUB_REPOSITORY", "KRONOS_RELEASE_TAG_PUBLIC_KEY_SECRET"),
+	cmd.Env = append(cleanEnv(os.Environ(), "GH_RELEASE_REPO", "GITHUB_REPOSITORY", "KRONOS_RELEASE_TAG_PUBLIC_KEY_SECRET", "KRONOS_RELEASE_TAG_SIGNER_FINGERPRINT"),
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"GH_RELEASE_REPO=ersinkoc/Kronos",
 	)

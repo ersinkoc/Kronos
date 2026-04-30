@@ -193,7 +193,8 @@ run.
 2. Add deeper verification drill evidence, including failure-injection
    scenarios beyond the current agent-level missing/corrupted chunk drills.
 3. Set the `KRONOS_RELEASE_TAG_PUBLIC_KEY` repository secret to the trusted
-   armored public GPG key for the release tag signer, then run one more signed
+   armored public GPG key for release tag signer
+   `5A9E4321B35B583DAFE3DC11F9936A44B1CF413C`, then run one more signed
    rehearsal or production tag to validate the release workflow evidence upload
    path.
 
