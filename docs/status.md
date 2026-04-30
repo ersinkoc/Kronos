@@ -132,7 +132,8 @@ backends; unsupported capabilities are surfaced early instead of falling
 through to ambiguous runtime behavior.
 
 Tagged E2E coverage is available for the implemented worker/control-plane/Redis
-backup and restore path, retention apply metadata pruning, and lost-agent
+backup and restore path, scheduled pre-backup shell/webhook hook execution,
+failure hook execution, retention apply metadata pruning, and lost-agent
 recovery during job claim. The same tagged suite also covers server restart
 recovery for active jobs reopened from persisted state, plus PostgreSQL
 worker/control-plane/local-storage backup and restore smoke coverage through

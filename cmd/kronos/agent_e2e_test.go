@@ -58,6 +58,110 @@ func TestE2EWorkerBacksUpRedisThroughControlPlane(t *testing.T) {
 	}
 }
 
+func TestE2EWorkerRunsPreBackupHooksThroughControlPlane(t *testing.T) {
+	redisServer := startE2ERedisServer(t)
+	repoDir := t.TempDir()
+	stores := newE2EControlPlaneStores(t, redisServer.endpoint, repoDir)
+	hookLog := filepath.Join(t.TempDir(), "pre-backup-hook.log")
+	webhookPayloads := make(chan map[string]any, 1)
+	webhook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		webhookPayloads <- payload
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer webhook.Close()
+	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, stores))
+	defer server.Close()
+
+	job := core.Job{
+		ID:         "hooked-backup",
+		Operation:  core.JobOperationBackup,
+		ScheduleID: "schedule-hooks",
+		TargetID:   "target-redis",
+		StorageID:  "storage-local",
+		Type:       core.BackupTypeFull,
+		Status:     core.JobStatusQueued,
+		QueuedAt:   time.Now().UTC(),
+		Hooks: core.JobHooks{PreBackup: []core.JobHookAction{
+			{Shell: fmt.Sprintf("printf 'hook=%%s job=%%s op=%%s target=%%s storage=%%s schedule=%%s\\n' \"$KRONOS_HOOK\" \"$KRONOS_JOB_ID\" \"$KRONOS_JOB_OPERATION\" \"$KRONOS_TARGET_ID\" \"$KRONOS_STORAGE_ID\" \"$KRONOS_SCHEDULE_ID\" > %s", strconv.Quote(hookLog))},
+			{WebhookURL: webhook.URL},
+		}},
+	}
+	if err := stores.jobs.Save(job); err != nil {
+		t.Fatalf("Save(hooked backup job) error = %v", err)
+	}
+
+	_, privateKey := newE2EKeys(t)
+	done, cancel := startE2EWorker(t, server, privateKey, "agent-e2e-hooks")
+	waitForE2EJobStatus(t, stores.jobs, done, job.ID, core.JobStatusSucceeded)
+	cancel()
+	expectE2EWorkerCanceled(t, done)
+
+	logged, err := os.ReadFile(hookLog)
+	if err != nil {
+		t.Fatalf("ReadFile(pre-backup hook log) error = %v", err)
+	}
+	wantLog := "hook=pre_backup job=hooked-backup op=backup target=target-redis storage=storage-local schedule=schedule-hooks\n"
+	if string(logged) != wantLog {
+		t.Fatalf("pre-backup hook log = %q, want %q", string(logged), wantLog)
+	}
+	select {
+	case payload := <-webhookPayloads:
+		if payload["hook"] != "pre_backup" || payload["job_id"] != "hooked-backup" || payload["operation"] != "backup" {
+			t.Fatalf("pre-backup webhook payload = %#v", payload)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for pre-backup webhook")
+	}
+}
+
+func TestE2EWorkerRunsFailureHookThroughControlPlane(t *testing.T) {
+	repoDir := t.TempDir()
+	stores := newE2EControlPlaneStores(t, "127.0.0.1:1", repoDir)
+	hookLog := filepath.Join(t.TempDir(), "failure-hook.log")
+	server := httptest.NewServer(newServerHandlerWithStores(nil, nil, stores))
+	defer server.Close()
+
+	job := core.Job{
+		ID:        "failing-hooked-backup",
+		Operation: core.JobOperationBackup,
+		TargetID:  "target-redis",
+		StorageID: "storage-local",
+		Type:      core.BackupTypeFull,
+		Status:    core.JobStatusQueued,
+		QueuedAt:  time.Now().UTC(),
+		Hooks: core.JobHooks{OnFailure: []core.JobHookAction{
+			{Shell: fmt.Sprintf("printf 'hook=%%s job=%%s op=%%s error=%%s\\n' \"$KRONOS_HOOK\" \"$KRONOS_JOB_ID\" \"$KRONOS_JOB_OPERATION\" \"$KRONOS_JOB_ERROR\" > %s", strconv.Quote(hookLog))},
+		}},
+	}
+	if err := stores.jobs.Save(job); err != nil {
+		t.Fatalf("Save(failing hooked backup job) error = %v", err)
+	}
+
+	_, privateKey := newE2EKeys(t)
+	done, cancel := startE2EWorker(t, server, privateKey, "agent-e2e-failure-hooks")
+	failed := waitForE2EJobStatus(t, stores.jobs, done, job.ID, core.JobStatusFailed)
+	cancel()
+	expectE2EWorkerCanceled(t, done)
+
+	logged, err := os.ReadFile(hookLog)
+	if err != nil {
+		t.Fatalf("ReadFile(failure hook log) error = %v", err)
+	}
+	text := string(logged)
+	if !strings.Contains(text, "hook=on_failure job=failing-hooked-backup op=backup error=") || !strings.Contains(text, "127.0.0.1:1") {
+		t.Fatalf("failure hook log = %q", text)
+	}
+	if failed.Error == "" || strings.Contains(failed.Error, "on_failure hooks") {
+		t.Fatalf("failed job error = %q, want original backup error without hook failure", failed.Error)
+	}
+}
+
 func TestE2EWorkerRestoresRedisThroughControlPlane(t *testing.T) {
 	redisServer := startE2ERedisServer(t)
 	repoDir := t.TempDir()

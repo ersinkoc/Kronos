@@ -1,6 +1,6 @@
 # Production Readiness
 
-Last reviewed from the repository state on April 29, 2026.
+Last reviewed from the repository state on April 30, 2026.
 
 Kronos is close to production-ready for the implemented Redis or Valkey backup
 path with local or S3-compatible storage. A PostgreSQL logical backup/restore
@@ -50,9 +50,9 @@ fully production-grade.
 
 | Scope | Estimate | Notes |
 | --- | ---: | --- |
-| Implemented Redis/local/S3 path | 95% | Core pipeline, TLS/mTLS-capable agent/control-plane transport, lost-agent recovery, server restart recovery, restore planning, retention, notifications, schedule hooks, audit, metrics, release scripts, single-replica Kubernetes examples with EKS/GKE/AKS overlays, runbooks, a reusable production gate, and tagged worker/control-plane/Redis backup, restore, retention apply, and recovery E2E tests are in place. |
+| Implemented Redis/local/S3 path | 95% | Core pipeline, TLS/mTLS-capable agent/control-plane transport, lost-agent recovery, server restart recovery, restore planning, retention, notifications, schedule hooks, audit, metrics, release scripts, single-replica Kubernetes examples with EKS/GKE/AKS overlays, runbooks, a reusable production gate, and tagged worker/control-plane/Redis backup, restore, hook, retention apply, and recovery E2E tests are in place. |
 | Broad multi-database product vision | 96% | Redis is executable, PostgreSQL now has a plain SQL logical driver MVP, optional global role metadata capture, full global restore coverage, worker pipeline smoke E2E coverage, CI conformance coverage across PostgreSQL 15, 16, and 17, a PostgreSQL 15-to-17 restore rehearsal, and a 10,000-row PostgreSQL restore drill. MySQL/MariaDB now has a `mysqldump`/`mysql` logical MVP with unit coverage, real-service MySQL 8.4 and MariaDB 11.4 conformance, bidirectional MySQL/MariaDB restore rehearsal coverage, and 10,000-row MySQL/MariaDB restore drills. MongoDB now has a `mongodump`/`mongorestore` archive MVP with unit coverage, authenticated real-service MongoDB 7.0/8.0 conformance, failed restore cleanup coverage, an authenticated MongoDB 7.0 10,000-document restore drill, and a MongoDB 7.0 replica-set/oplog recovery drill, while storage backends, WebUI workflows, native MongoDB oplog streaming, and multi-instance deployment patterns remain roadmap work. |
-| Current repository release hygiene | 99% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, SBOM module verification, GitHub build/SBOM attestations, keyless cosign signatures and verification, consumer release verification docs, CI govulncheck, release-gated SBOM vulnerability verification, release artifact smoke checks, missing/corrupted chunk verification failure drills, notification fan-out and hook execution tests, PostgreSQL full global restore, PostgreSQL operator-scale restore, MySQL, MariaDB, bidirectional MySQL/MariaDB restore rehearsal conformance, 10,000-row MySQL/MariaDB restore drills, authenticated MongoDB 7.0/8.0 service conformance, authenticated MongoDB 7.0 operator-scale restore drill, MongoDB 7.0 replica-set/oplog recovery drill, the production check script, tagged backup/restore/retention/recovery E2E coverage, and Node 24-native GitHub Actions are present. The `golang.org/x/crypto` advisories are fixed. |
+| Current repository release hygiene | 99% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, SBOM module verification, GitHub build/SBOM attestations, keyless cosign signatures and verification, consumer release verification docs, CI govulncheck, release-gated SBOM vulnerability verification, release artifact smoke checks, missing/corrupted chunk verification failure drills, notification fan-out and hook execution tests, PostgreSQL full global restore, PostgreSQL operator-scale restore, MySQL, MariaDB, bidirectional MySQL/MariaDB restore rehearsal conformance, 10,000-row MySQL/MariaDB restore drills, authenticated MongoDB 7.0/8.0 service conformance, authenticated MongoDB 7.0 operator-scale restore drill, MongoDB 7.0 replica-set/oplog recovery drill, the production check script, tagged backup/restore/hook/retention/recovery E2E coverage, and Node 24-native GitHub Actions are present. The `golang.org/x/crypto` advisories are fixed. |
 
 ## Current Release Gate
 
@@ -167,20 +167,22 @@ run.
   executing the host binary and validating generated shell completion.
 - Tagged E2E coverage exercises a control-plane HTTP server, worker agent,
   local repository storage, and Redis-compatible RESP target together for
-  backup and restore. It also covers retention apply over committed backup
-  metadata, including dry-run behavior, deletion, and mutation audit recording.
-  Lost-agent recovery is covered through heartbeat, claim, failed running job,
-  target unblock, and recovery audit behavior. Server restart recovery is
-  covered through persisted running/finalizing jobs, boot-time recovery, HTTP
-  job inspection, and post-shutdown state verification. PostgreSQL worker smoke
-  coverage exercises backup and restore through fake `pg_dump`/`psql` tools,
-  the control plane, local storage, manifests, and the restore pipeline:
+  backup and restore. It also covers scheduled pre-backup shell/webhook hook
+  execution, failure hook execution with `KRONOS_JOB_ERROR`, retention apply
+  over committed backup metadata, including dry-run behavior, deletion, and
+  mutation audit recording. Lost-agent recovery is covered through heartbeat,
+  claim, failed running job, target unblock, and recovery audit behavior.
+  Server restart recovery is covered through persisted running/finalizing jobs,
+  boot-time recovery, HTTP job inspection, and post-shutdown state verification.
+  PostgreSQL worker smoke coverage exercises backup and restore through fake
+  `pg_dump`/`psql` tools, the control plane, local storage, manifests, and the
+  restore pipeline:
   `go test -tags=e2e ./cmd/kronos`.
 
 ## Blocking Work Before Calling The Whole Product Production-Ready
 
-1. Extend E2E coverage into more retention policy edge cases, hook execution,
-   and release verification drills.
+1. Extend E2E coverage into more retention policy edge cases and release
+   verification drills.
 2. Add deeper verification drill evidence, including failure-injection
    scenarios beyond the current agent-level missing/corrupted chunk drills.
 3. Run at least one signed-tag release rehearsal against a disposable version
