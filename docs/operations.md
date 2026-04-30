@@ -465,6 +465,75 @@ groups:
    ./bin/kronos schedule tick
    ```
 
+### Upgrade Rollback
+
+Before replacing a production binary, preserve the current executable, config,
+state database, and release evidence in the same change ticket. For systemd
+deployments that use the packaged unit defaults, the server state directory is
+`/var/lib/kronos`; for ad hoc deployments, use the path configured by
+`server.data_dir`.
+
+1. Snapshot the pre-upgrade state while the control plane is stopped:
+
+   ```bash
+   sudo systemctl stop kronos-agent
+   sudo systemctl stop kronos-server
+   sudo install -D -m 0755 /usr/local/bin/kronos /var/lib/kronos/rollback/kronos.previous
+   sudo install -D -m 0640 /etc/kronos/kronos.yaml /var/lib/kronos/rollback/kronos.yaml.previous
+   sudo cp -a /var/lib/kronos/state.db /var/lib/kronos/rollback/state.db.previous
+   sudo cp -a /var/lib/kronos/state.db.wal /var/lib/kronos/rollback/state.db.wal.previous 2>/dev/null || true
+   sudo sync
+   ```
+
+2. If post-upgrade health checks fail, stop writers before restoring the
+   previous state. Do not roll back while agents can still claim work:
+
+   ```bash
+   sudo systemctl stop kronos-agent
+   sudo systemctl stop kronos-server
+   ```
+
+3. Restore the previous binary and state database as one unit, then run the
+   state repair check before accepting traffic:
+
+   ```bash
+   sudo install -m 0755 /var/lib/kronos/rollback/kronos.previous /usr/local/bin/kronos
+   sudo install -m 0640 /var/lib/kronos/rollback/kronos.yaml.previous /etc/kronos/kronos.yaml
+   sudo cp -a /var/lib/kronos/rollback/state.db.previous /var/lib/kronos/state.db
+   if [ -f /var/lib/kronos/rollback/state.db.wal.previous ]; then
+     sudo cp -a /var/lib/kronos/rollback/state.db.wal.previous /var/lib/kronos/state.db.wal
+   else
+     sudo rm -f /var/lib/kronos/state.db.wal
+   fi
+   sudo -u kronos /usr/local/bin/kronos repair-db --db /var/lib/kronos/state.db
+   ```
+
+4. Start the control plane first, verify readiness and build metadata, then
+   restart agents:
+
+   ```bash
+   sudo systemctl start kronos-server
+   curl -fsS http://127.0.0.1:8500/readyz
+   curl -fsS http://127.0.0.1:8500/metrics | grep kronos_build_info
+   sudo systemctl start kronos-agent
+   ./bin/kronos agent list
+   ./bin/kronos jobs list
+   ```
+
+5. Keep schedules paused until operators inspect running/finalizing jobs,
+   recent audit events, and at least one manifest verification from the
+   repository that was active during the failed upgrade:
+
+   ```bash
+   ./bin/kronos audit list --limit 20
+   ./bin/kronos backup verify --manifest-key <manifest-key> --level manifest --public-key <public-key-hex> --storage-local <repo-path>
+   ./bin/kronos schedule resume --id <schedule-id>
+   ```
+
+Treat rollback snapshots as sensitive data. They can contain encrypted resource
+records, token metadata, audit state, and repository paths; store and delete
+them with the same access controls as the live `state.db`.
+
 ## Key Rotation
 
 Kronos separates manifest signing keys from chunk encryption keys. Rotate them

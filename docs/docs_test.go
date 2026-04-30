@@ -304,6 +304,30 @@ func TestReleaseVerificationDocumentsSupplyChainChecks(t *testing.T) {
 	}
 }
 
+func TestOperationsDocumentsUpgradeRollback(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile("operations.md")
+	if err != nil {
+		t.Fatalf("ReadFile(operations.md) error = %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"### Upgrade Rollback",
+		"/var/lib/kronos/rollback/kronos.previous",
+		"/var/lib/kronos/rollback/state.db.previous",
+		"sudo systemctl stop kronos-agent",
+		"sudo systemctl stop kronos-server",
+		"repair-db --db /var/lib/kronos/state.db",
+		"kronos_build_info",
+		"Treat rollback snapshots as sensitive data",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("operations.md missing %q", want)
+		}
+	}
+}
+
 func TestCIWorkflowCoversMongoDBConformanceVersions(t *testing.T) {
 	t.Parallel()
 

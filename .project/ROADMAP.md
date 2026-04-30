@@ -88,7 +88,7 @@ Kronos has a strong core: CLI, HTTP control plane, agent worker, persistent KV s
 - [ ] Run signed-tag release rehearsal and archive checksum/signature/tag-signature/attestation evidence.
 - [x] Add immutable image digest guidance and example overlays.
 - [x] Add systemd units if bare-metal Linux is a supported production target.
-- [ ] Add rollback procedure for state DB and binary upgrades.
+- [x] Add rollback procedure for state DB and binary upgrades.
 - [ ] Add monitoring dashboard examples for Prometheus metrics.
 - [ ] Add release artifact vulnerability/SBOM verification to the documented gate.
 
