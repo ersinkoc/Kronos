@@ -11,6 +11,8 @@ image, configuration, secrets, and network policy with your
 environment-specific controls. The Kubernetes control-plane example is a hard
 single-replica topology while Kronos uses embedded PVC-backed state; scale
 agents for more work capacity, not the control-plane Deployment.
+For bare-metal or VM deployments, start from the systemd examples in
+[contrib/systemd](../contrib/systemd/README.md).
 
 ## Preflight
 

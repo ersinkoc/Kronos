@@ -160,6 +160,70 @@ func TestKubernetesImmutableImageOverlayPinsDigest(t *testing.T) {
 	}
 }
 
+func TestSystemdUnitsExist(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join("..", "contrib", "systemd")
+	for _, name := range []string{
+		"README.md",
+		"kronos-server.service",
+		"kronos-agent.service",
+		"kronos-server.env.example",
+		"kronos-agent.env.example",
+	} {
+		path := filepath.Join(root, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("ReadFile(%s) error = %v", path, err)
+		}
+		if len(data) == 0 {
+			t.Fatalf("%s is empty", path)
+		}
+	}
+
+	serverUnit, err := os.ReadFile(filepath.Join(root, "kronos-server.service"))
+	if err != nil {
+		t.Fatalf("ReadFile(kronos-server.service) error = %v", err)
+	}
+	serverText := string(serverUnit)
+	for _, want := range []string{
+		"ExecStart=/usr/local/bin/kronos server --config /etc/kronos/kronos.yaml",
+		"EnvironmentFile=-/etc/kronos/kronos-server.env",
+		"StateDirectory=kronos",
+		"NoNewPrivileges=true",
+		"ProtectSystem=strict",
+	} {
+		if !strings.Contains(serverText, want) {
+			t.Fatalf("kronos-server.service missing %q", want)
+		}
+	}
+
+	agentUnit, err := os.ReadFile(filepath.Join(root, "kronos-agent.service"))
+	if err != nil {
+		t.Fatalf("ReadFile(kronos-agent.service) error = %v", err)
+	}
+	agentText := string(agentUnit)
+	for _, want := range []string{
+		"ExecStart=/usr/local/bin/kronos agent --work",
+		"EnvironmentFile=-/etc/kronos/kronos-agent.env",
+		"KRONOS_SERVER_URL",
+		"NoNewPrivileges=true",
+		"ProtectSystem=strict",
+	} {
+		if !strings.Contains(agentText, want) {
+			t.Fatalf("kronos-agent.service missing %q", want)
+		}
+	}
+
+	readme, err := os.ReadFile("operations.md")
+	if err != nil {
+		t.Fatalf("ReadFile(operations.md) error = %v", err)
+	}
+	if !strings.Contains(string(readme), "../contrib/systemd/README.md") {
+		t.Fatalf("operations.md missing systemd runbook link")
+	}
+}
+
 func TestReleaseWorkflowPublishesArtifacts(t *testing.T) {
 	t.Parallel()
 

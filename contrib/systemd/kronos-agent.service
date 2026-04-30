@@ -1,0 +1,32 @@
+[Unit]
+Description=Kronos worker agent
+Documentation=https://github.com/ersinkoc/Kronos
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kronos
+Group=kronos
+EnvironmentFile=-/etc/kronos/kronos-agent.env
+ExecStart=/usr/local/bin/kronos agent --work --server ${KRONOS_SERVER_URL} --id ${KRONOS_AGENT_ID} --capacity ${KRONOS_AGENT_CAPACITY} --key-id ${KRONOS_KEY_ID}
+Restart=on-failure
+RestartSec=5s
+StateDirectory=kronos-agent
+RuntimeDirectory=kronos-agent
+WorkingDirectory=/var/lib/kronos-agent
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/kronos-agent
+ReadOnlyPaths=/etc/kronos
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
