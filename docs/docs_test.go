@@ -95,6 +95,39 @@ func TestPublicDocsMatchDriverMVPStatus(t *testing.T) {
 	}
 }
 
+func TestChangelogDocumentsUnreleasedScope(t *testing.T) {
+	t.Parallel()
+
+	changelog, err := os.ReadFile(filepath.Join("..", "CHANGELOG.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(CHANGELOG.md) error = %v", err)
+	}
+	text := string(changelog)
+	for _, want := range []string{
+		"# Changelog",
+		"## Unreleased",
+		"### Added",
+		"### Changed",
+		"### Fixed",
+		"Systemd unit examples",
+		"Importable Grafana overview dashboard",
+		"Release artifact SBOM module coverage",
+		"external-tool MVP",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("CHANGELOG.md missing %q", want)
+		}
+	}
+
+	readme, err := os.ReadFile(filepath.Join("..", "README.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(README.md) error = %v", err)
+	}
+	if !strings.Contains(string(readme), "[Changelog](CHANGELOG.md)") {
+		t.Fatalf("README.md missing changelog link")
+	}
+}
+
 func TestKubernetesManifestsExist(t *testing.T) {
 	t.Parallel()
 
