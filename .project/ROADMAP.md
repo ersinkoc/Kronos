@@ -74,7 +74,7 @@ Kronos has a strong core: CLI, HTTP control plane, agent worker, persistent KV s
 
 ### Documentation and developer experience
 
-- [ ] Update public README/spec claims to match actual driver behavior.
+- [x] Update public README/spec claims to match actual driver behavior.
 - [ ] Add `CHANGELOG.md`.
 - [ ] Generate rendered API docs from `api/openapi/openapi.yaml`.
 - [ ] Split production readiness docs into implemented-path readiness vs full-product readiness.

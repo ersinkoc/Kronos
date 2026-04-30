@@ -2,8 +2,11 @@
 
 **Time devours. Kronos preserves.**
 
-Kronos is a zero-dependency Go binary for scheduled, encrypted, verified
-database backups. The product brief and build plan live in `.project/`:
+Kronos is a Go-based backup manager for scheduled, encrypted, verified
+database backups. Redis/Valkey currently runs as the most complete native
+driver; PostgreSQL, MySQL/MariaDB, and MongoDB are implemented as external-tool
+MVP drivers that require the matching database client tools on worker agents.
+The product brief and build plan live in `.project/`:
 
 - [Specification](.project/SPECIFICATION.md)
 - [Implementation](.project/IMPLEMENTATION.md)

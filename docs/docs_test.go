@@ -55,6 +55,46 @@ func TestCLIReferenceDocumentsRequestID(t *testing.T) {
 	}
 }
 
+func TestPublicDocsMatchDriverMVPStatus(t *testing.T) {
+	t.Parallel()
+
+	readme, err := os.ReadFile(filepath.Join("..", "README.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(README.md) error = %v", err)
+	}
+	readmeText := string(readme)
+	for _, want := range []string{
+		"Redis/Valkey currently runs as the most complete native",
+		"PostgreSQL, MySQL/MariaDB, and MongoDB are implemented as external-tool",
+		"corresponding client tools installed",
+		"Native protocol drivers and PITR remain",
+	} {
+		if !strings.Contains(readmeText, want) {
+			t.Fatalf("README.md missing %q", want)
+		}
+	}
+	if strings.Contains(readmeText, "Kronos is a zero-dependency Go binary") {
+		t.Fatalf("README.md still markets the implemented MVP as zero dependency")
+	}
+
+	spec, err := os.ReadFile(filepath.Join("..", ".project", "SPECIFICATION.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(SPECIFICATION.md) error = %v", err)
+	}
+	specText := string(spec)
+	for _, want := range []string{
+		"this document preserves the",
+		"long-term product vision",
+		"not an accurate MVP release contract",
+		"external database tools for PostgreSQL, MySQL/MariaDB, and MongoDB",
+		"docs/decisions/0002-external-tool-driver-mvp.md",
+	} {
+		if !strings.Contains(specText, want) {
+			t.Fatalf(".project/SPECIFICATION.md missing %q", want)
+		}
+	}
+}
+
 func TestKubernetesManifestsExist(t *testing.T) {
 	t.Parallel()
 

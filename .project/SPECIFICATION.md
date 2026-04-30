@@ -1,5 +1,15 @@
 # Kronos — SPECIFICATION
 
+> Current implementation note, April 30, 2026: this document preserves the
+> long-term product vision. It is not an accurate MVP release contract where it
+> claims pure-Go database drivers, no shell-outs, PITR for PostgreSQL/MySQL/
+> MongoDB, gRPC agent transport, or SFTP/Azure/GCS storage. The implemented MVP
+> uses external database tools for PostgreSQL, MySQL/MariaDB, and MongoDB,
+> hardened HTTP polling for agents, and local/S3 storage. See
+> [`docs/decisions/0002-external-tool-driver-mvp.md`](../docs/decisions/0002-external-tool-driver-mvp.md)
+> and [`docs/production-readiness.md`](../docs/production-readiness.md) for the
+> current release scope.
+
 > **Kronos** is the Titan of Time. Time devours obsolete backups; Kronos preserves what matters.
 >
 > A zero-dependency, single-binary database backup manager written in pure Go.
