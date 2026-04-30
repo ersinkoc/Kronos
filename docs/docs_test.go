@@ -378,6 +378,59 @@ func TestReleaseVerificationDocumentsSupplyChainChecks(t *testing.T) {
 	}
 }
 
+func TestReleaseGateRequiresSBOMVulnerabilityVerification(t *testing.T) {
+	t.Parallel()
+
+	ci, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatalf("ReadFile(ci.yml) error = %v", err)
+	}
+	release, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatalf("ReadFile(release.yml) error = %v", err)
+	}
+	verifySBOM, err := os.ReadFile(filepath.Join("..", "scripts", "verify-sbom.sh"))
+	if err != nil {
+		t.Fatalf("ReadFile(verify-sbom.sh) error = %v", err)
+	}
+	docs, err := os.ReadFile("release-verification.md")
+	if err != nil {
+		t.Fatalf("ReadFile(release-verification.md) error = %v", err)
+	}
+
+	for path, text := range map[string]string{
+		".github/workflows/ci.yml":      string(ci),
+		".github/workflows/release.yml": string(release),
+	} {
+		for _, want := range []string{
+			"KRONOS_REQUIRE_GOVULNCHECK=1 ./scripts/verify-sbom.sh bin",
+			"./scripts/verify-release.sh bin",
+		} {
+			if !strings.Contains(text, want) {
+				t.Fatalf("%s missing %q", path, want)
+			}
+		}
+	}
+	for _, want := range []string{
+		"require_govulncheck=\"${KRONOS_REQUIRE_GOVULNCHECK:-0}\"",
+		"govulncheck is required but was not found",
+		"\"$govulncheck_cmd\" ./...",
+	} {
+		if !strings.Contains(string(verifySBOM), want) {
+			t.Fatalf("verify-sbom.sh missing %q", want)
+		}
+	}
+	for _, want := range []string{
+		"KRONOS_REQUIRE_GOVULNCHECK=1 ./scripts/verify-sbom.sh bin",
+		"It is a source/module vulnerability gate, not a standalone",
+		"Do not promote a release if any checksum, SBOM, vulnerability, signature, or",
+	} {
+		if !strings.Contains(string(docs), want) {
+			t.Fatalf("release-verification.md missing %q", want)
+		}
+	}
+}
+
 func TestOperationsDocumentsUpgradeRollback(t *testing.T) {
 	t.Parallel()
 

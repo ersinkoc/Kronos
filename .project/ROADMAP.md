@@ -90,7 +90,7 @@ Kronos has a strong core: CLI, HTTP control plane, agent worker, persistent KV s
 - [x] Add systemd units if bare-metal Linux is a supported production target.
 - [x] Add rollback procedure for state DB and binary upgrades.
 - [x] Add monitoring dashboard examples for Prometheus metrics.
-- [ ] Add release artifact vulnerability/SBOM verification to the documented gate.
+- [x] Add release artifact vulnerability/SBOM verification to the documented gate.
 
 ## Beyond v1.0: Future Enhancements
 
