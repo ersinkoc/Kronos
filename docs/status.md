@@ -52,7 +52,8 @@ flowchart LR
   coverage.
 - MongoDB logical driver MVP using `mongodump`/`mongorestore` archives with
   restore guardrails, failed restore cleanup coverage, authenticated MongoDB
-  7.0/8.0 conformance, and a MongoDB 7.0 10,000-document restore drill.
+  7.0/8.0 conformance, a MongoDB 7.0 10,000-document restore drill, and a
+  MongoDB 7.0 replica-set/oplog recovery drill.
 - Persistent scheduler and queued/running/terminal job lifecycle.
 - Agent worker resource sync, heartbeat, job claim, backup execution, restore
   execution, and finish reporting.
@@ -173,8 +174,8 @@ broad multi-database production suite. The largest remaining areas are:
   archive MVP with unit coverage for restore guardrails and failed restore
   temp-config cleanup, authenticated MongoDB 7.0/8.0 real-service conformance,
   an authenticated MongoDB 7.0 10,000-document restore drill, and unit-covered
-  replica-set `--oplog` / `--oplogReplay` command wiring. MongoDB still needs a
-  real replica-set/oplog recovery drill in CI.
+  replica-set `--oplog` / `--oplogReplay` command wiring backed by a real
+  MongoDB 7.0 replica-set/oplog recovery drill in CI.
 - Additional storage backends such as SFTP, Azure Blob, and Google Cloud
   Storage. Current executable backends are local filesystem and S3-compatible
   object storage.
@@ -196,9 +197,8 @@ broad multi-database production suite. The largest remaining areas are:
 
 ## Next Best Work
 
-1. Add MongoDB replica-set/oplog recovery coverage beyond the authenticated
-   MongoDB 7.0/8.0 archive conformance and MongoDB 7.0 restore drill.
-2. Extend PostgreSQL hardening around broader upgrade rehearsal evidence.
+1. Extend PostgreSQL hardening around broader upgrade rehearsal evidence.
+2. Add release artifact vulnerability/SBOM verification to the documented gate.
 3. Add additional notification channels and hook execution surfaces.
 4. Run a signed-tag release rehearsal and archive checksum, signature, and
    attestation verification evidence.

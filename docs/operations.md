@@ -356,7 +356,8 @@ groups:
    `KRONOS_MONGODB_TEST_AUTH_SOURCE` when the service requires authentication.
    The main CI workflow runs authenticated MongoDB 7.0/8.0 conformance and an
    authenticated MongoDB 7.0 10,000-document restore drill against separate
-   source and target service containers.
+   source and target service containers, plus a MongoDB 7.0 replica-set/oplog
+   recovery drill against disposable source and target replica sets.
 
 2. Publish an immutable release from a signed tag when cutting a production
    version:

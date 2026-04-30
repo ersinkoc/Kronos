@@ -193,6 +193,10 @@ func TestCIWorkflowCoversMongoDBConformanceVersions(t *testing.T) {
 		`- "7.0"`,
 		`- "8.0"`,
 		"mongodb/mongodb-community-server:${{ matrix.mongodb-version }}-ubuntu2204",
+		"name: mongodb-oplog-rehearsal (7.0 replica set)",
+		"KRONOS_MONGODB_OPLOG_TEST_ADDR",
+		"KRONOS_MONGODB_OPLOG_RESTORE_ADDR",
+		"TestMongoDBDriverReplicaSetOplogRehearsal",
 		"go test -tags=integration ./internal/drivers/mongodb",
 	} {
 		if !strings.Contains(text, want) {
@@ -222,8 +226,8 @@ func TestCIWorkflowMountsMongoTempConfigIntoContainerizedClients(t *testing.T) {
 		t.Fatalf("ReadFile(ci.yml) error = %v", err)
 	}
 	const want = `--network host --user "$(id -u):$(id -g)" --volume /tmp:/tmp "${MONGODB_IMAGE:?}"`
-	if got := strings.Count(string(data), want); got != 2 {
-		t.Fatalf("MongoDB client wrappers with temp config mount = %d, want 2", got)
+	if got := strings.Count(string(data), want); got != 3 {
+		t.Fatalf("MongoDB client wrappers with temp config mount = %d, want 3", got)
 	}
 }
 

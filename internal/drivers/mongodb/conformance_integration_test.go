@@ -102,6 +102,82 @@ func TestMongoDBDriverConformanceBackupRestore(t *testing.T) {
 	}
 }
 
+func TestMongoDBDriverReplicaSetOplogRehearsal(t *testing.T) {
+	sourceAddr := strings.TrimSpace(os.Getenv("KRONOS_MONGODB_OPLOG_TEST_ADDR"))
+	if sourceAddr == "" {
+		t.Skip("KRONOS_MONGODB_OPLOG_TEST_ADDR is not set")
+	}
+	restoreAddr := strings.TrimSpace(os.Getenv("KRONOS_MONGODB_OPLOG_RESTORE_ADDR"))
+	if restoreAddr == "" {
+		t.Skip("KRONOS_MONGODB_OPLOG_RESTORE_ADDR is not set")
+	}
+	requireCommand(t, "mongodump")
+	requireCommand(t, "mongorestore")
+	requireCommand(t, "mongosh")
+
+	ctx, cancel := context.WithTimeout(context.Background(), mongoTestTimeout(t))
+	defer cancel()
+
+	suffix := randomHex(t, 4)
+	sourceDB := "kronos_oplog_" + suffix
+	sourceUser := strings.TrimSpace(os.Getenv("KRONOS_MONGODB_OPLOG_TEST_USER"))
+	sourcePassword := os.Getenv("KRONOS_MONGODB_OPLOG_TEST_PASSWORD")
+	sourceAuthSource := firstNonEmpty(strings.TrimSpace(os.Getenv("KRONOS_MONGODB_OPLOG_TEST_AUTH_SOURCE")), "admin")
+	restoreUser := firstNonEmpty(strings.TrimSpace(os.Getenv("KRONOS_MONGODB_OPLOG_RESTORE_USER")), sourceUser)
+	restorePassword := firstNonEmpty(os.Getenv("KRONOS_MONGODB_OPLOG_RESTORE_PASSWORD"), sourcePassword)
+	restoreAuthSource := firstNonEmpty(strings.TrimSpace(os.Getenv("KRONOS_MONGODB_OPLOG_RESTORE_AUTH_SOURCE")), sourceAuthSource)
+
+	sourceAdmin := mongoTestTarget(sourceAddr, "admin", sourceUser, sourcePassword, sourceAuthSource)
+	restoreAdmin := mongoTestTarget(restoreAddr, "admin", restoreUser, restorePassword, restoreAuthSource)
+	sourceDatabaseTarget := mongoTestTarget(sourceAddr, sourceDB, sourceUser, sourcePassword, sourceAuthSource)
+	restoreDatabaseTarget := mongoTestTarget(restoreAddr, sourceDB, restoreUser, restorePassword, restoreAuthSource)
+	backupTarget := mongoDeploymentTarget(sourceAddr, sourceUser, sourcePassword, sourceAuthSource)
+	backupTarget.Options["oplog"] = "true"
+	restoreTarget := mongoDeploymentTarget(restoreAddr, restoreUser, restorePassword, restoreAuthSource)
+
+	cleanupMongoDatabase(t, ctx, sourceAdmin, sourceDB)
+	cleanupMongoDatabase(t, ctx, restoreAdmin, sourceDB)
+	defer cleanupMongoDatabase(t, context.Background(), sourceAdmin, sourceDB)
+	defer cleanupMongoDatabase(t, context.Background(), restoreAdmin, sourceDB)
+
+	runMongoShell(t, ctx, sourceDatabaseTarget, fmt.Sprintf(`
+db.events.insertMany([
+  {id: 1, phase: "baseline", tag: %q},
+  {id: 2, phase: "baseline", tag: %q}
+]);
+db.events.createIndex({phase: 1}, {name: "events_phase_idx"});
+`, suffix, suffix))
+
+	driver := NewDriver()
+	var backup drivers.MemoryRecordStream
+	rp, err := driver.BackupFull(ctx, backupTarget, &backup)
+	if err != nil {
+		t.Fatalf("BackupFull(oplog) error = %v", err)
+	}
+	if rp.Position != "mongodump:archive+oplog" {
+		t.Fatalf("ResumePoint.Position = %q, want mongodump:archive+oplog", rp.Position)
+	}
+	records := backup.Records()
+	if len(records) < 2 || records[0].Object.Kind != deploymentObjectKind {
+		t.Fatalf("oplog backup records do not include deployment archive: %#v", records)
+	}
+	if len(records[0].Payload) == 0 {
+		t.Fatal("oplog backup payload is empty")
+	}
+
+	cleanupMongoDatabase(t, ctx, restoreAdmin, sourceDB)
+	if err := driver.Restore(ctx, restoreTarget, &backup, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
+		t.Fatalf("Restore(oplog) error = %v", err)
+	}
+
+	if got := queryMongoScalar(t, ctx, restoreDatabaseTarget, `db.events.countDocuments()`); got != "2" {
+		t.Fatalf("restored events count = %q, want 2", got)
+	}
+	if got := queryMongoScalar(t, ctx, restoreDatabaseTarget, `db.events.getIndexes().some((idx) => idx.name === "events_phase_idx")`); got != "true" {
+		t.Fatalf("restored events index presence = %q, want true", got)
+	}
+}
+
 func TestMongoRestoreCommandTargetIncludesAuthSource(t *testing.T) {
 	t.Parallel()
 
@@ -183,6 +259,22 @@ func mongoTestTarget(addr string, database string, username string, password str
 		connection["authSource"] = authSource
 	}
 	return drivers.Target{Connection: connection}
+}
+
+func mongoDeploymentTarget(addr string, username string, password string, authSource string) drivers.Target {
+	connection := map[string]string{
+		"addr": addr,
+	}
+	if username != "" {
+		connection["username"] = username
+	}
+	if password != "" {
+		connection["password"] = password
+	}
+	if username != "" && authSource != "" {
+		connection["authSource"] = authSource
+	}
+	return drivers.Target{Connection: connection, Options: map[string]string{}}
 }
 
 func mongoRestoreCommandTarget(addr string, database string, username string, password string, authSource string) drivers.Target {

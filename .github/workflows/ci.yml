@@ -543,6 +543,79 @@ jobs:
           MONGODB_IMAGE: mongodb/mongodb-community-server:7.0-ubuntu2204
         run: go test -tags=integration ./internal/drivers/mongodb
 
+  mongodb-oplog-rehearsal:
+    name: mongodb-oplog-rehearsal (7.0 replica set)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Start MongoDB replica sets
+        env:
+          MONGODB_IMAGE: mongodb/mongodb-community-server:7.0-ubuntu2204
+        run: |
+          docker run -d --name kronos-mongodb-oplog-source --network host "${MONGODB_IMAGE:?}" mongod --replSet kronosSource --bind_ip_all --port 27020
+          docker run -d --name kronos-mongodb-oplog-target --network host "${MONGODB_IMAGE:?}" mongod --replSet kronosTarget --bind_ip_all --port 27021
+
+          for port in 27020 27021; do
+            for attempt in $(seq 1 30); do
+              if docker run --rm --network host "${MONGODB_IMAGE:?}" mongosh --quiet --host 127.0.0.1 --port "$port" --eval 'db.adminCommand("ping").ok' >/dev/null 2>&1; then
+                break
+              fi
+              if [ "$attempt" -eq 30 ]; then
+                echo "MongoDB on port $port did not become reachable" >&2
+                exit 1
+              fi
+              sleep 2
+            done
+          done
+
+          docker run --rm --network host "${MONGODB_IMAGE:?}" mongosh --quiet --host 127.0.0.1 --port 27020 --eval 'rs.initiate({_id:"kronosSource",members:[{_id:0,host:"127.0.0.1:27020"}]})'
+          docker run --rm --network host "${MONGODB_IMAGE:?}" mongosh --quiet --host 127.0.0.1 --port 27021 --eval 'rs.initiate({_id:"kronosTarget",members:[{_id:0,host:"127.0.0.1:27021"}]})'
+
+          for port in 27020 27021; do
+            for attempt in $(seq 1 30); do
+              if docker run --rm --network host "${MONGODB_IMAGE:?}" mongosh --quiet --host 127.0.0.1 --port "$port" --eval 'db.hello().isWritablePrimary' | grep -q true; then
+                break
+              fi
+              if [ "$attempt" -eq 30 ]; then
+                echo "MongoDB replica set on port $port did not elect a primary" >&2
+                exit 1
+              fi
+              sleep 2
+            done
+          done
+
+      - name: Create MongoDB client wrappers
+        env:
+          MONGODB_IMAGE: mongodb/mongodb-community-server:7.0-ubuntu2204
+        run: |
+          mkdir -p .tools/mongodb-client
+          for command in mongosh mongodump mongorestore; do
+            cat > ".tools/mongodb-client/${command}" <<'SH'
+          #!/usr/bin/env sh
+          set -eu
+          command_name="$(basename "$0")"
+          exec docker run -i --rm --network host --user "$(id -u):$(id -g)" --volume /tmp:/tmp "${MONGODB_IMAGE:?}" "$command_name" "$@"
+          SH
+            chmod +x ".tools/mongodb-client/${command}"
+          done
+          echo "$PWD/.tools/mongodb-client" >> "$GITHUB_PATH"
+
+      - name: MongoDB oplog rehearsal
+        env:
+          KRONOS_MONGODB_OPLOG_TEST_ADDR: 127.0.0.1:27020
+          KRONOS_MONGODB_OPLOG_RESTORE_ADDR: 127.0.0.1:27021
+          KRONOS_MONGODB_TEST_TIMEOUT_SECONDS: "300"
+          MONGODB_IMAGE: mongodb/mongodb-community-server:7.0-ubuntu2204
+        run: go test -tags=integration ./internal/drivers/mongodb -run TestMongoDBDriverReplicaSetOplogRehearsal -count=1
+
   mysql-to-mariadb-restore-rehearsal:
     name: mysql-to-mariadb-restore-rehearsal (8.4-to-11.4)
     runs-on: ubuntu-latest

@@ -129,7 +129,8 @@ MongoDB restores also require explicit replace-existing intent. Set
 Database Tools reject `--oplog` for database-scoped dumps, so Kronos rejects
 targets that combine both. CI exercises the database-scoped archive path
 against MongoDB 7.0 and 8.0 with real-service backup/restore conformance, plus
-a MongoDB 7.0 10,000-document restore drill.
+a MongoDB 7.0 10,000-document restore drill and replica-set/oplog recovery
+drill.
 
 ## 6. Run A Backup
 
