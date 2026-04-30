@@ -48,6 +48,25 @@ func TestArchiveReleaseEvidenceCapturesVerificationLogs(t *testing.T) {
 	if err := os.WriteFile(fakeCosign, []byte(fake), 0o755); err != nil {
 		t.Fatalf("WriteFile(fake cosign) error = %v", err)
 	}
+	ghArgsPath := filepath.Join(t.TempDir(), "gh.args")
+	fakeGh := filepath.Join(binDir, "gh")
+	ghScript := fmt.Sprintf(`#!/usr/bin/env sh
+set -eu
+printf 'gh %%s\n' "$*" >>%q
+if [ "$1" = "attestation" ] && [ "$2" = "verify" ]; then
+	echo "verify failed"
+	exit 1
+fi
+if [ "$1" = "attestation" ] && [ "$2" = "download" ]; then
+	printf '%%s\n' '{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json"}' >sha256:test.jsonl
+	exit 0
+fi
+echo "unexpected gh invocation: $*" >&2
+exit 1
+`, ghArgsPath)
+	if err := os.WriteFile(fakeGh, []byte(ghScript), 0o755); err != nil {
+		t.Fatalf("WriteFile(fake gh) error = %v", err)
+	}
 	fakeGit := filepath.Join(binDir, "git")
 	gitScript := `#!/usr/bin/env sh
 set -eu
@@ -82,8 +101,9 @@ exit 1
 
 	cmd := exec.Command("sh", filepath.Join(root, "scripts", "archive-release-evidence.sh"), releaseDir, evidenceDir)
 	cmd.Dir = root
-	cmd.Env = append(cleanEnv(os.Environ(), "GH_ATTESTATION_REPO", "GITHUB_REPOSITORY", "COSIGN_CERTIFICATE_IDENTITY_REGEXP"),
+	cmd.Env = append(cleanEnv(os.Environ(), "GITHUB_REPOSITORY", "COSIGN_CERTIFICATE_IDENTITY_REGEXP"),
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"GH_ATTESTATION_REPO=ersinkoc/Kronos",
 		"KRONOS_RELEASE_TAG=v0.0.0-test",
 	)
 	output, err := cmd.CombinedOutput()
@@ -111,5 +131,25 @@ exit 1
 		!strings.Contains(string(summary), "release_tag=v0.0.0-test") ||
 		!strings.Contains(string(summary), "attestation_log=attestations.log") {
 		t.Fatalf("summary missing expected log references:\n%s", summary)
+	}
+	attestations, err := os.ReadFile(filepath.Join(evidenceDir, "attestations.log"))
+	if err != nil {
+		t.Fatalf("ReadFile(attestations) error = %v", err)
+	}
+	if !strings.Contains(string(attestations), "gh attestation verify failed; retrying with cosign bundle verification") ||
+		!strings.Contains(string(attestations), "--type slsaprovenance1") ||
+		!strings.Contains(string(attestations), "--type spdx") ||
+		!strings.Contains(string(attestations), "--certificate-oidc-issuer https://token.actions.githubusercontent.com") {
+		t.Fatalf("attestations log missing cosign fallback details:\n%s", attestations)
+	}
+	ghArgs, err := os.ReadFile(ghArgsPath)
+	if err != nil {
+		t.Fatalf("ReadFile(gh args) error = %v", err)
+	}
+	if !strings.Contains(string(ghArgs), "attestation verify") ||
+		!strings.Contains(string(ghArgs), "attestation download") ||
+		!strings.Contains(string(ghArgs), "https://slsa.dev/provenance/v1") ||
+		!strings.Contains(string(ghArgs), "https://spdx.dev/Document/v2.3") {
+		t.Fatalf("gh args missing attestation verify/download calls:\n%s", ghArgs)
 	}
 }

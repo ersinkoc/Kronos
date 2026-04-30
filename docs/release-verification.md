@@ -93,7 +93,7 @@ attestation payload, request the SBOM predicate type and output JSON:
 gh attestation verify bin/kronos-linux-amd64 \
   --repo ersinkoc/Kronos \
   --signer-workflow .github/workflows/release.yml \
-  --predicate-type https://spdx.dev/Document \
+  --predicate-type https://spdx.dev/Document/v2.3 \
   --format json
 ```
 
