@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -246,37 +249,7 @@ func TestBackupExecutorRunsRestoreJob(t *testing.T) {
 func TestBackupExecutorRunsChunkVerificationJob(t *testing.T) {
 	t.Parallel()
 
-	publicKey, privateKey, err := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{6}, 64)))
-	if err != nil {
-		t.Fatalf("GenerateKey() error = %v", err)
-	}
-	registry := drivers.NewRegistry()
-	driver := &executorFakeDriver{}
-	if err := registry.Register(driver); err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
-	backend := storagetest.NewMemoryBackend("memory")
-	executor := BackupExecutor{
-		Drivers: registry,
-		Targets: map[core.ID]drivers.Target{
-			"target-1": {Name: "redis-prod", Driver: "fake"},
-		},
-		Backends: map[core.ID]storage.Backend{
-			"storage-1": backend,
-		},
-		PipelineFactory: testPipelineFactory(t),
-		PublicKey:       publicKey,
-		PrivateKey:      privateKey,
-		Clock:           core.NewFakeClock(time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)),
-	}
-	backupResult, err := executor.Execute(context.Background(), core.Job{
-		ID: "backup-job", Operation: core.JobOperationBackup, TargetID: "target-1", StorageID: "storage-1", Type: core.BackupTypeFull,
-	})
-	if err != nil {
-		t.Fatalf("Execute(backup) error = %v", err)
-	}
-	backup := backupResult.Backup
-	executor.Backups = map[core.ID]core.Backup{backup.ID: *backup}
+	executor, _, backup, _ := executorWithCommittedBackup(t, 6)
 	verified, err := executor.Execute(context.Background(), core.Job{
 		ID:                "verify-job",
 		Operation:         core.JobOperationVerify,
@@ -292,6 +265,172 @@ func TestBackupExecutorRunsChunkVerificationJob(t *testing.T) {
 	}
 	if verified.Backup != nil || verified.Verification == nil || verified.Verification.VerifiedChunks == 0 || verified.Verification.RestoredBytes == 0 {
 		t.Fatalf("verify result = %#v, want chunk verification report", verified)
+	}
+}
+
+func TestBackupExecutorVerificationFailsForMissingChunk(t *testing.T) {
+	t.Parallel()
+
+	executor, backend, backup, publicKey := executorWithCommittedBackup(t, 7)
+	committed := loadExecutorManifest(t, backend, backup.ManifestID, publicKey)
+	chunkKey := committed.Objects[0].Chunks[0].Key
+	if err := backend.Delete(context.Background(), chunkKey); err != nil {
+		t.Fatalf("Delete(chunk) error = %v", err)
+	}
+
+	_, err := executor.Execute(context.Background(), core.Job{
+		ID:               "verify-job",
+		Operation:        core.JobOperationVerify,
+		StorageID:        "storage-1",
+		VerifyBackupID:   backup.ID,
+		VerifyManifestID: backup.ManifestID,
+		VerifyLevel:      core.JobVerificationChunk,
+	})
+	if err == nil {
+		t.Fatal("Execute(verify) error = nil, want missing chunk failure")
+	}
+	if !strings.Contains(err.Error(), "missing chunks") || !strings.Contains(err.Error(), chunkKey) {
+		t.Fatalf("Execute(verify) error = %q, want missing chunk key %q", err, chunkKey)
+	}
+}
+
+func TestBackupExecutorVerificationFailsForCorruptedChunk(t *testing.T) {
+	t.Parallel()
+
+	executor, backend, backup, publicKey := executorWithCommittedBackup(t, 8)
+	committed := loadExecutorManifest(t, backend, backup.ManifestID, publicKey)
+	chunkKey := committed.Objects[0].Chunks[0].Key
+	if err := backend.Delete(context.Background(), chunkKey); err != nil {
+		t.Fatalf("Delete(chunk) error = %v", err)
+	}
+	if _, err := backend.Put(context.Background(), chunkKey, strings.NewReader("not an encrypted chunk envelope"), -1); err != nil {
+		t.Fatalf("Put(corrupt chunk) error = %v", err)
+	}
+
+	_, err := executor.Execute(context.Background(), core.Job{
+		ID:               "verify-job",
+		Operation:        core.JobOperationVerify,
+		StorageID:        "storage-1",
+		VerifyBackupID:   backup.ID,
+		VerifyManifestID: backup.ManifestID,
+		VerifyLevel:      core.JobVerificationChunk,
+	})
+	if err == nil {
+		t.Fatal("Execute(verify) error = nil, want corrupted chunk failure")
+	}
+	if !strings.Contains(err.Error(), `verify object "stream" chunks`) || !strings.Contains(err.Error(), "decrypt chunk") {
+		t.Fatalf("Execute(verify) error = %q, want chunk decrypt failure", err)
+	}
+}
+
+func TestBackupExecutorRunsPreBackupShellHook(t *testing.T) {
+	t.Parallel()
+
+	executor, _, _, _ := executorWithCommittedBackup(t, 10)
+	executor.Backends["storage-1"] = storagetest.NewMemoryBackend("memory")
+	hookFile := filepath.Join(t.TempDir(), "pre-hook")
+	_, err := executor.Execute(context.Background(), core.Job{
+		ID:        "hook-job",
+		Operation: core.JobOperationBackup,
+		TargetID:  "target-1",
+		StorageID: "storage-1",
+		Type:      core.BackupTypeFull,
+		Hooks: core.JobHooks{PreBackup: []core.JobHookAction{{
+			Shell: "printf '%s:%s' \"$KRONOS_HOOK\" \"$KRONOS_JOB_ID\" > " + hookFile,
+		}}},
+	})
+	if err != nil {
+		t.Fatalf("Execute(backup with hook) error = %v", err)
+	}
+	data, err := os.ReadFile(hookFile)
+	if err != nil {
+		t.Fatalf("ReadFile(hookFile) error = %v", err)
+	}
+	if string(data) != "pre_backup:hook-job" {
+		t.Fatalf("hook output = %q", data)
+	}
+}
+
+func TestBackupExecutorRunsFailureShellHook(t *testing.T) {
+	t.Parallel()
+
+	publicKey, privateKey, err := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{11}, 64)))
+	if err != nil {
+		t.Fatalf("GenerateKey() error = %v", err)
+	}
+	registry := drivers.NewRegistry()
+	driver := &executorFakeDriver{backupErr: fmt.Errorf("driver boom")}
+	if err := registry.Register(driver); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	backend := storagetest.NewMemoryBackend("memory")
+	executor := BackupExecutor{
+		Drivers: registry,
+		Targets: map[core.ID]drivers.Target{
+			"target-1": {Name: "redis-prod", Driver: "fake"},
+		},
+		Backends: map[core.ID]storage.Backend{
+			"storage-1": backend,
+		},
+		PipelineFactory: testPipelineFactory(t),
+		PublicKey:       publicKey,
+		PrivateKey:      privateKey,
+	}
+	hookFile := filepath.Join(t.TempDir(), "failure-hook")
+	_, err = executor.Execute(context.Background(), core.Job{
+		ID:        "hook-job",
+		Operation: core.JobOperationBackup,
+		TargetID:  "target-1",
+		StorageID: "storage-1",
+		Type:      core.BackupTypeFull,
+		Hooks: core.JobHooks{OnFailure: []core.JobHookAction{{
+			Shell: "printf '%s:%s' \"$KRONOS_HOOK\" \"$KRONOS_JOB_ERROR\" > " + hookFile,
+		}}},
+	})
+	if err == nil {
+		t.Fatal("Execute(backup) error = nil, want driver failure")
+	}
+	if !strings.Contains(err.Error(), "driver boom") {
+		t.Fatalf("Execute(backup) error = %v, want driver failure", err)
+	}
+	data, readErr := os.ReadFile(hookFile)
+	if readErr != nil {
+		t.Fatalf("ReadFile(hookFile) error = %v", readErr)
+	}
+	if !strings.Contains(string(data), "on_failure:") || !strings.Contains(string(data), "driver boom") {
+		t.Fatalf("failure hook output = %q", data)
+	}
+}
+
+func TestBackupExecutorRunsWebhookHook(t *testing.T) {
+	t.Parallel()
+
+	var payload map[string]any
+	webhook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("Decode(webhook) error = %v", err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer webhook.Close()
+
+	executor, _, _, _ := executorWithCommittedBackup(t, 12)
+	executor.Backends["storage-1"] = storagetest.NewMemoryBackend("memory")
+	_, err := executor.Execute(context.Background(), core.Job{
+		ID:        "webhook-job",
+		Operation: core.JobOperationBackup,
+		TargetID:  "target-1",
+		StorageID: "storage-1",
+		Type:      core.BackupTypeFull,
+		Hooks: core.JobHooks{PreBackup: []core.JobHookAction{{
+			WebhookURL: webhook.URL,
+		}}},
+	})
+	if err != nil {
+		t.Fatalf("Execute(backup with webhook hook) error = %v", err)
+	}
+	if payload["hook"] != "pre_backup" || payload["job_id"] != "webhook-job" {
+		t.Fatalf("webhook payload = %#v", payload)
 	}
 }
 
@@ -630,8 +769,72 @@ func testPipelineFactory(t *testing.T) PipelineFactory {
 	}
 }
 
+func executorWithCommittedBackup(t *testing.T, seed byte) (BackupExecutor, *storagetest.MemoryBackend, *core.Backup, ed25519.PublicKey) {
+	t.Helper()
+	publicKey, privateKey, err := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{seed}, 64)))
+	if err != nil {
+		t.Fatalf("GenerateKey() error = %v", err)
+	}
+	registry := drivers.NewRegistry()
+	driver := &executorFakeDriver{}
+	if err := registry.Register(driver); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	backend := storagetest.NewMemoryBackend("memory")
+	executor := BackupExecutor{
+		Drivers: registry,
+		Targets: map[core.ID]drivers.Target{
+			"target-1": {Name: "redis-prod", Driver: "fake"},
+		},
+		Backends: map[core.ID]storage.Backend{
+			"storage-1": backend,
+		},
+		PipelineFactory: testPipelineFactory(t),
+		PublicKey:       publicKey,
+		PrivateKey:      privateKey,
+		Clock:           core.NewFakeClock(time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)),
+	}
+	backupResult, err := executor.Execute(context.Background(), core.Job{
+		ID: "backup-job", Operation: core.JobOperationBackup, TargetID: "target-1", StorageID: "storage-1", Type: core.BackupTypeFull,
+	})
+	if err != nil {
+		t.Fatalf("Execute(backup) error = %v", err)
+	}
+	backup := backupResult.Backup
+	if backup == nil {
+		t.Fatal("Execute(backup) returned nil backup")
+	}
+	executor.Backups = map[core.ID]core.Backup{backup.ID: *backup}
+	return executor, backend, backup, publicKey
+}
+
+func loadExecutorManifest(t *testing.T, backend storage.Backend, manifestID core.ID, publicKey ed25519.PublicKey) manifest.Manifest {
+	t.Helper()
+	rc, _, err := backend.Get(context.Background(), string(manifestID))
+	if err != nil {
+		t.Fatalf("Get(manifest) error = %v", err)
+	}
+	defer rc.Close()
+	var manifestBytes bytes.Buffer
+	if _, err := manifestBytes.ReadFrom(rc); err != nil {
+		t.Fatalf("ReadFrom(manifest) error = %v", err)
+	}
+	committed, err := manifest.Parse(manifestBytes.Bytes())
+	if err != nil {
+		t.Fatalf("Parse(manifest) error = %v", err)
+	}
+	if err := committed.Verify(publicKey); err != nil {
+		t.Fatalf("Verify(manifest) error = %v", err)
+	}
+	if len(committed.Objects) == 0 || len(committed.Objects[0].Chunks) == 0 {
+		t.Fatalf("manifest has no chunk references: %#v", committed)
+	}
+	return committed
+}
+
 type executorFakeDriver struct {
 	restored          []drivers.Record
+	backupErr         error
 	payload           string
 	incrementalParent string
 	restoreOptions    drivers.RestoreOptions
@@ -644,6 +847,9 @@ func (*executorFakeDriver) Version(context.Context, drivers.Target) (string, err
 func (*executorFakeDriver) Test(context.Context, drivers.Target) error { return nil }
 
 func (d *executorFakeDriver) BackupFull(ctx context.Context, target drivers.Target, w drivers.RecordWriter) (drivers.ResumePoint, error) {
+	if d.backupErr != nil {
+		return drivers.ResumePoint{}, d.backupErr
+	}
 	obj := drivers.ObjectRef{Name: "keys", Kind: "stream"}
 	payload := d.payload
 	if payload == "" {

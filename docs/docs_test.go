@@ -104,6 +104,25 @@ func TestKubernetesControlPlaneDocumentsSingleReplicaBoundary(t *testing.T) {
 	}
 }
 
+func TestKubernetesManagedClusterOverlaysExist(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join("..", "deploy", "kubernetes", "overlays")
+	for _, provider := range []string{"eks", "gke", "aks"} {
+		base := filepath.Join(root, provider)
+		for _, name := range []string{"README.md", "kustomization.yaml", "pvc-storageclass.yaml", "serviceaccount.yaml", "workload-identity.yaml"} {
+			path := filepath.Join(base, name)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("ReadFile(%s) error = %v", path, err)
+			}
+			if len(data) == 0 {
+				t.Fatalf("%s is empty", path)
+			}
+		}
+	}
+}
+
 func TestReleaseWorkflowPublishesArtifacts(t *testing.T) {
 	t.Parallel()
 

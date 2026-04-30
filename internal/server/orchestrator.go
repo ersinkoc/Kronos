@@ -48,6 +48,7 @@ func (o *Orchestrator) EnqueueDue(due []schedule.DueJob) ([]core.Job, error) {
 			StorageID:      item.StorageID,
 			Type:           item.Type,
 			ParentBackupID: item.ParentBackupID,
+			Hooks:          item.Hooks,
 			Status:         core.JobStatusQueued,
 			QueuedAt:       queuedAt,
 		}

@@ -36,6 +36,7 @@ type DueJob struct {
 	StorageID      core.ID
 	Type           core.BackupType
 	ParentBackupID core.ID
+	Hooks          core.JobHooks
 	DueAt          time.Time
 	QueuedAt       time.Time
 }
@@ -157,6 +158,7 @@ func dueJob(schedule core.Schedule, dueAt time.Time, queuedAt time.Time) DueJob 
 		TargetID:   schedule.TargetID,
 		StorageID:  schedule.StorageID,
 		Type:       schedule.BackupType,
+		Hooks:      schedule.Hooks,
 		DueAt:      dueAt,
 		QueuedAt:   queuedAt,
 	}

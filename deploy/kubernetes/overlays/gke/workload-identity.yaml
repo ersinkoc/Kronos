@@ -1,0 +1,9 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kronos-control-plane
+  namespace: kronos
+spec:
+  template:
+    spec:
+      serviceAccountName: kronos-control-plane

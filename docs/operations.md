@@ -196,7 +196,9 @@ notifications:
     events:
       - job.succeeded
       - job.canceled
-    webhook: "${env:KRONOS_RESTORE_DRILL_WEBHOOK}"
+    channels:
+      - "${env:KRONOS_RESTORE_DRILL_WEBHOOK}"
+      - "${env:KRONOS_RESTORE_AUDIT_WEBHOOK}"
 ```
 
 Supported events are `job.succeeded`, `job.failed`, and `job.canceled`. Webhook
@@ -207,6 +209,31 @@ the attempt budget is exhausted. When `secret` is set, Kronos sends
 `X-Kronos-Signature: sha256=<hex-hmac>` over the JSON payload. Treat
 notification endpoints as production dependencies: use HTTPS, verify signatures,
 keep receiver timeouts short, and make the receiver idempotent.
+Use `channels` when the same event should fan out to more than one webhook; the
+control plane persists each configured channel as a separate notification rule.
+
+Schedules can also attach agent-side hooks that run with job context
+environment variables such as `KRONOS_HOOK`, `KRONOS_JOB_ID`,
+`KRONOS_JOB_OPERATION`, `KRONOS_TARGET_ID`, `KRONOS_STORAGE_ID`, and
+`KRONOS_JOB_ERROR` for failure hooks:
+
+```yaml
+projects:
+  - name: default
+    schedules:
+      - name: prod-pg-nightly
+        hooks:
+          pre_backup:
+            - shell: "/usr/local/bin/kronos-preflight"
+            - webhook: "https://hooks.example.com/pre-backup"
+          on_failure:
+            - shell: "/usr/local/bin/kronos-incident"
+            - webhook: "https://hooks.example.com/incidents"
+```
+
+Shell hooks execute on the claiming agent through `sh -c`; treat them as
+privileged local automation, keep commands deterministic, and avoid expanding
+untrusted target or job values into shell fragments.
 
 Notification rules are also manageable through the control-plane API:
 

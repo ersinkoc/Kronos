@@ -448,6 +448,11 @@ func TestSeedAPIStoresFromConfig(t *testing.T) {
 		Schedules: []config.ScheduleConfig{{
 			Name: "redis-nightly", Target: "redis-prod", Storage: "local-primary", Type: "full", Cron: "0 2 * * *", Retention: "gfs-standard",
 		}},
+	}}, Notifications: []config.NotificationConfig{{
+		Name:     "ops",
+		When:     string(core.NotificationJobFailed),
+		Webhook:  "https://hooks.example.com/primary",
+		Channels: []string{"https://hooks.example.com/secondary", "https://hooks.example.com/audit"},
 	}}}
 	if err := seedAPIStoresFromConfig(stores, cfg, now); err != nil {
 		t.Fatalf("seedAPIStoresFromConfig() error = %v", err)
@@ -482,6 +487,22 @@ func TestSeedAPIStoresFromConfig(t *testing.T) {
 	}
 	if schedule.TargetID != "default/redis-prod" || schedule.StorageID != "default/local-primary" || schedule.RetentionPolicy != "gfs-standard" {
 		t.Fatalf("schedule = %#v", schedule)
+	}
+	notifications, err := stores.notifications.List()
+	if err != nil {
+		t.Fatalf("List(notifications) error = %v", err)
+	}
+	if len(notifications) != 3 {
+		t.Fatalf("notifications = %#v, want three configured channels", notifications)
+	}
+	if notifications[0].ID != "config/ops" || notifications[0].WebhookURL != "https://hooks.example.com/primary" {
+		t.Fatalf("primary notification = %#v", notifications[0])
+	}
+	if notifications[1].ID != "config/ops/channel-2" || notifications[1].WebhookURL != "https://hooks.example.com/secondary" {
+		t.Fatalf("secondary notification = %#v", notifications[1])
+	}
+	if notifications[2].ID != "config/ops/channel-3" || notifications[2].WebhookURL != "https://hooks.example.com/audit" {
+		t.Fatalf("audit notification = %#v", notifications[2])
 	}
 }
 

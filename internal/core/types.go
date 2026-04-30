@@ -173,6 +173,18 @@ const (
 	NotificationJobCanceled NotificationEvent = "job.canceled"
 )
 
+// JobHookAction describes one hook action executed by an agent around job work.
+type JobHookAction struct {
+	Shell      string `json:"shell,omitempty"`
+	WebhookURL string `json:"webhook_url,omitempty"`
+}
+
+// JobHooks groups lifecycle hooks that can be attached to scheduled jobs.
+type JobHooks struct {
+	PreBackup []JobHookAction `json:"pre_backup,omitempty"`
+	OnFailure []JobHookAction `json:"on_failure,omitempty"`
+}
+
 // RoleName identifies a built-in RBAC role.
 type RoleName string
 
@@ -219,6 +231,7 @@ type Schedule struct {
 	BackupType      BackupType        `json:"backup_type"`
 	Expression      string            `json:"expression"`
 	RetentionPolicy ID                `json:"retention_policy_id,omitempty"`
+	Hooks           JobHooks          `json:"hooks,omitempty"`
 	Paused          bool              `json:"paused"`
 	CreatedAt       time.Time         `json:"created_at"`
 	UpdatedAt       time.Time         `json:"updated_at"`
@@ -250,6 +263,7 @@ type Job struct {
 	VerifyManifestIDs      []ID                 `json:"verify_manifest_ids,omitempty"`
 	VerifyLevel            JobVerificationLevel `json:"verify_level,omitempty"`
 	VerifyReport           *VerificationReport  `json:"verify_report,omitempty"`
+	Hooks                  JobHooks             `json:"hooks,omitempty"`
 	Status                 JobStatus            `json:"status"`
 	QueuedAt               time.Time            `json:"queued_at"`
 	StartedAt              time.Time            `json:"started_at,omitempty"`

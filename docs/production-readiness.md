@@ -50,9 +50,9 @@ fully production-grade.
 
 | Scope | Estimate | Notes |
 | --- | ---: | --- |
-| Implemented Redis/local/S3 path | 95% | Core pipeline, TLS/mTLS-capable agent/control-plane transport, lost-agent recovery, server restart recovery, restore planning, retention, audit, metrics, release scripts, single-replica Kubernetes examples, runbooks, a reusable production gate, and tagged worker/control-plane/Redis backup, restore, retention apply, and recovery E2E tests are in place. |
+| Implemented Redis/local/S3 path | 95% | Core pipeline, TLS/mTLS-capable agent/control-plane transport, lost-agent recovery, server restart recovery, restore planning, retention, notifications, schedule hooks, audit, metrics, release scripts, single-replica Kubernetes examples with EKS/GKE/AKS overlays, runbooks, a reusable production gate, and tagged worker/control-plane/Redis backup, restore, retention apply, and recovery E2E tests are in place. |
 | Broad multi-database product vision | 96% | Redis is executable, PostgreSQL now has a plain SQL logical driver MVP, optional global role metadata capture, full global restore coverage, worker pipeline smoke E2E coverage, CI conformance coverage across PostgreSQL 15, 16, and 17, a PostgreSQL 15-to-17 restore rehearsal, and a 10,000-row PostgreSQL restore drill. MySQL/MariaDB now has a `mysqldump`/`mysql` logical MVP with unit coverage, real-service MySQL 8.4 and MariaDB 11.4 conformance, bidirectional MySQL/MariaDB restore rehearsal coverage, and 10,000-row MySQL/MariaDB restore drills. MongoDB now has a `mongodump`/`mongorestore` archive MVP with unit coverage, authenticated real-service MongoDB 7.0/8.0 conformance, failed restore cleanup coverage, an authenticated MongoDB 7.0 10,000-document restore drill, and a MongoDB 7.0 replica-set/oplog recovery drill, while storage backends, WebUI workflows, native MongoDB oplog streaming, and multi-instance deployment patterns remain roadmap work. |
-| Current repository release hygiene | 99% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, SBOM module verification, GitHub build/SBOM attestations, keyless cosign signatures and verification, consumer release verification docs, CI govulncheck, release-gated SBOM vulnerability verification, release artifact smoke checks, PostgreSQL full global restore, PostgreSQL operator-scale restore, MySQL, MariaDB, bidirectional MySQL/MariaDB restore rehearsal conformance, 10,000-row MySQL/MariaDB restore drills, authenticated MongoDB 7.0/8.0 service conformance, authenticated MongoDB 7.0 operator-scale restore drill, MongoDB 7.0 replica-set/oplog recovery drill, the production check script, tagged backup/restore/retention/recovery E2E coverage, and Node 24-native GitHub Actions are present. The `golang.org/x/crypto` advisories are fixed. |
+| Current repository release hygiene | 99% | Tests, vet, format checks, OpenAPI checks, release artifacts, provenance, SBOM metadata, SBOM module verification, GitHub build/SBOM attestations, keyless cosign signatures and verification, consumer release verification docs, CI govulncheck, release-gated SBOM vulnerability verification, release artifact smoke checks, missing/corrupted chunk verification failure drills, notification fan-out and hook execution tests, PostgreSQL full global restore, PostgreSQL operator-scale restore, MySQL, MariaDB, bidirectional MySQL/MariaDB restore rehearsal conformance, 10,000-row MySQL/MariaDB restore drills, authenticated MongoDB 7.0/8.0 service conformance, authenticated MongoDB 7.0 operator-scale restore drill, MongoDB 7.0 replica-set/oplog recovery drill, the production check script, tagged backup/restore/retention/recovery E2E coverage, and Node 24-native GitHub Actions are present. The `golang.org/x/crypto` advisories are fixed. |
 
 ## Current Release Gate
 
@@ -118,6 +118,9 @@ run.
 - Local and S3-compatible storage backends.
 - Persistent control plane state, scheduler state, jobs, backups, retention,
   notifications, users, tokens, and audit log.
+- Configured notification rules can fan out one event to multiple webhook
+  channels, and scheduled backup jobs can carry pre-backup and failure hooks to
+  the claiming agent for shell or webhook execution.
 - Restore evidence artifacts are hash-addressed and stored independently from
   job records, so `/api/v1/jobs/{id}/evidence` remains available after job
   metadata pruning.
@@ -176,10 +179,10 @@ run.
 
 ## Blocking Work Before Calling The Whole Product Production-Ready
 
-1. Extend E2E coverage into more retention policy edge cases and release
-   verification drills.
+1. Extend E2E coverage into more retention policy edge cases, hook execution,
+   and release verification drills.
 2. Add deeper verification drill evidence, including failure-injection
-   scenarios for missing or corrupted chunks.
+   scenarios beyond the current agent-level missing/corrupted chunk drills.
 3. Run at least one signed-tag release rehearsal against a disposable version
    tag and archive the verification evidence.
 

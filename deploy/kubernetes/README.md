@@ -14,6 +14,19 @@ kubectl -n kronos port-forward service/kronos-control-plane 8500:8500
 curl -fsS http://127.0.0.1:8500/readyz
 ```
 
+Provider-specific kustomize overlays are available for common managed
+Kubernetes environments:
+
+```bash
+kubectl apply -k deploy/kubernetes/overlays/eks
+kubectl apply -k deploy/kubernetes/overlays/gke
+kubectl apply -k deploy/kubernetes/overlays/aks
+```
+
+These overlays keep the single-replica control-plane boundary and add
+provider-appropriate PVC storage classes plus workload identity service account
+placeholders.
+
 The agent Deployment starts with `replicas: 0` so the example can be applied
 before production secrets exist. After creating an agent token and keys, create
 the secret and scale workers:

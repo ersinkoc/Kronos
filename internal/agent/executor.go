@@ -5,7 +5,10 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -130,13 +133,116 @@ func (e BackupExecutor) Execute(ctx context.Context, job core.Job) (core.JobResu
 	switch job.Operation {
 	case core.JobOperationRestore:
 		report, err := e.executeRestore(ctx, job)
+		if err != nil {
+			err = e.runFailureHooks(ctx, job, err)
+		}
 		return core.JobResult{Restore: report}, err
 	case core.JobOperationVerify:
 		report, err := e.executeVerify(ctx, job)
+		if err != nil {
+			err = e.runFailureHooks(ctx, job, err)
+		}
 		return core.JobResult{Verification: report}, err
 	}
+	if err := e.runHooks(ctx, job, "pre_backup", job.Hooks.PreBackup, nil); err != nil {
+		return core.JobResult{}, err
+	}
 	backup, err := e.executeBackup(ctx, job)
+	if err != nil {
+		err = e.runFailureHooks(ctx, job, err)
+	}
 	return core.JobResult{Backup: backup}, err
+}
+
+func (e BackupExecutor) runFailureHooks(ctx context.Context, job core.Job, jobErr error) error {
+	if hookErr := e.runHooks(ctx, job, "on_failure", job.Hooks.OnFailure, jobErr); hookErr != nil {
+		return fmt.Errorf("%w; on_failure hooks: %v", jobErr, hookErr)
+	}
+	return jobErr
+}
+
+func (e BackupExecutor) runHooks(ctx context.Context, job core.Job, hookName string, actions []core.JobHookAction, jobErr error) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for i, action := range actions {
+		if shell := strings.TrimSpace(action.Shell); shell != "" {
+			if err := runShellHook(ctx, job, hookName, shell, jobErr); err != nil {
+				return fmt.Errorf("%s hook %d shell: %w", hookName, i+1, err)
+			}
+		}
+		if webhookURL := strings.TrimSpace(action.WebhookURL); webhookURL != "" {
+			if err := runWebhookHook(ctx, job, hookName, webhookURL, jobErr); err != nil {
+				return fmt.Errorf("%s hook %d webhook: %w", hookName, i+1, err)
+			}
+		}
+	}
+	return nil
+}
+
+func runShellHook(ctx context.Context, job core.Job, hookName string, command string, jobErr error) error {
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.Env = append(os.Environ(), hookEnv(job, hookName, jobErr)...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		text := strings.TrimSpace(string(output))
+		if text == "" {
+			return err
+		}
+		return fmt.Errorf("%w: %s", err, text)
+	}
+	return nil
+}
+
+func runWebhookHook(ctx context.Context, job core.Job, hookName string, webhookURL string, jobErr error) error {
+	payload, err := json.Marshal(hookPayload(job, hookName, jobErr))
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, strings.NewReader(string(payload)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("webhook returned %s", resp.Status)
+	}
+	return nil
+}
+
+func hookEnv(job core.Job, hookName string, jobErr error) []string {
+	values := []string{
+		"KRONOS_HOOK=" + hookName,
+		"KRONOS_JOB_ID=" + job.ID.String(),
+		"KRONOS_JOB_OPERATION=" + string(job.Operation),
+		"KRONOS_TARGET_ID=" + job.TargetID.String(),
+		"KRONOS_STORAGE_ID=" + job.StorageID.String(),
+		"KRONOS_SCHEDULE_ID=" + job.ScheduleID.String(),
+	}
+	if jobErr != nil {
+		values = append(values, "KRONOS_JOB_ERROR="+jobErr.Error())
+	}
+	return values
+}
+
+func hookPayload(job core.Job, hookName string, jobErr error) map[string]any {
+	payload := map[string]any{
+		"hook":        hookName,
+		"job_id":      job.ID,
+		"operation":   job.Operation,
+		"target_id":   job.TargetID,
+		"storage_id":  job.StorageID,
+		"schedule_id": job.ScheduleID,
+	}
+	if jobErr != nil {
+		payload["error"] = jobErr.Error()
+	}
+	return payload
 }
 
 func localStorageRoot(raw string) (string, error) {

@@ -739,22 +739,26 @@ func seedAPIStoresFromConfig(stores apiStores, cfg *config.Config, now time.Time
 				name = fmt.Sprintf("notification-%d", i+1)
 			}
 			events := notificationEvents(notification)
-			webhook := notification.Webhook
-			if webhook == "" && len(notification.Channels) > 0 {
-				webhook = notification.Channels[0]
-			}
-			if err := stores.notifications.Save(core.NotificationRule{
-				ID:          core.ID("config/" + name),
-				Name:        name,
-				Events:      events,
-				WebhookURL:  webhook,
-				Secret:      notification.Secret,
-				MaxAttempts: notification.MaxAttempts,
-				Enabled:     true,
-				CreatedAt:   now,
-				UpdatedAt:   now,
-			}); err != nil {
-				return fmt.Errorf("seed notification %s: %w", name, err)
+			for channelIndex, webhook := range notificationWebhooks(notification) {
+				ruleName := name
+				ruleID := core.ID("config/" + name)
+				if channelIndex > 0 {
+					ruleName = fmt.Sprintf("%s channel %d", name, channelIndex+1)
+					ruleID = core.ID(fmt.Sprintf("config/%s/channel-%d", name, channelIndex+1))
+				}
+				if err := stores.notifications.Save(core.NotificationRule{
+					ID:          ruleID,
+					Name:        ruleName,
+					Events:      events,
+					WebhookURL:  webhook,
+					Secret:      notification.Secret,
+					MaxAttempts: notification.MaxAttempts,
+					Enabled:     true,
+					CreatedAt:   now,
+					UpdatedAt:   now,
+				}); err != nil {
+					return fmt.Errorf("seed notification %s: %w", ruleName, err)
+				}
 			}
 		}
 	}
@@ -814,6 +818,7 @@ func seedAPIStoresFromConfig(stores apiStores, cfg *config.Config, now time.Time
 				BackupType:      backupType,
 				Expression:      schedule.Cron,
 				RetentionPolicy: core.ID(schedule.Retention),
+				Hooks:           scheduleHooks(schedule.Hooks),
 				CreatedAt:       now,
 				UpdatedAt:       now,
 				Labels:          map[string]string{"project": project.Name},
@@ -844,6 +849,36 @@ func notificationEvents(notification config.NotificationConfig) []core.Notificat
 		events = append(events, event)
 	}
 	return events
+}
+
+func notificationWebhooks(notification config.NotificationConfig) []string {
+	webhooks := make([]string, 0, 1+len(notification.Channels))
+	if notification.Webhook != "" {
+		webhooks = append(webhooks, notification.Webhook)
+	}
+	webhooks = append(webhooks, notification.Channels...)
+	return webhooks
+}
+
+func scheduleHooks(hooks config.HooksConfig) core.JobHooks {
+	return core.JobHooks{
+		PreBackup: hookActions(hooks.PreBackup),
+		OnFailure: hookActions(hooks.OnFailure),
+	}
+}
+
+func hookActions(actions []config.HookAction) []core.JobHookAction {
+	if len(actions) == 0 {
+		return nil
+	}
+	out := make([]core.JobHookAction, 0, len(actions))
+	for _, action := range actions {
+		out = append(out, core.JobHookAction{
+			Shell:      action.Shell,
+			WebhookURL: action.Webhook,
+		})
+	}
+	return out
 }
 
 func configResourceID(project string, name string) core.ID {

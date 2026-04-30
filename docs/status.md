@@ -67,9 +67,10 @@ flowchart LR
 - Direct control-plane TLS with optional client-certificate verification for
   agent mTLS enrollment.
 - Baseline HTTP security headers for API and embedded WebUI responses.
-- Webhook notification rules for terminal job events, API management, optional
-  HMAC payload signatures, bounded retries, and delivery metadata in the audit
-  chain.
+- Webhook notification rules for terminal job events, config-level multi-channel
+  fan-out, scheduled pre-backup/failure hook execution, API management,
+  optional HMAC payload signatures, bounded retries, and delivery metadata in
+  the audit chain.
 - Dashboard-oriented operations overview API with inventory counts, active job
   state, backup totals, readiness state, attention counters, and latest activity
   slices.
@@ -78,7 +79,8 @@ flowchart LR
   guidance, restore drill guidance, multi-platform release artifacts, checksums,
   provenance metadata, SBOM metadata, SBOM module/vulnerability verification,
   release artifact smoke checks, container builds, GitHub release publishing,
-  Kubernetes deployment examples, and cloud secret integration guidance.
+  Kubernetes deployment examples with EKS/GKE/AKS overlays, and cloud secret
+  integration guidance.
 
 ## Recent Progress
 
@@ -165,7 +167,7 @@ broad multi-database production suite. The largest remaining areas are:
   into a separate target, plus a PostgreSQL 17 operator-scale restore drill
   that verifies 10,000 indexed JSONB rows across separate source and target
   services. Remaining hardening is around native PITR/WAL coverage and broader
-  failure-injection evidence.
+  service-level failure-injection evidence.
 - Additional database driver depth. Current executable driver coverage is
   Redis/Valkey, the PostgreSQL logical MVP, a MySQL/MariaDB
   `mysqldump`/`mysql` logical MVP with unit coverage plus real-service MySQL
@@ -190,17 +192,12 @@ broad multi-database production suite. The largest remaining areas are:
   queueing, restore job history with restore outcome summaries and
   hash-addressed evidence artifacts, job cancel/retry, and backup protection
   actions.
-- Richer notification channels and hook execution surfaces from the product
-  plan.
+- Richer notification delivery integrations beyond webhooks and shell hooks.
 - Broader production hardening around auth integrations and future
   multi-instance operational patterns. The current Kubernetes manifests now
   document and enforce the supported single-replica control-plane boundary.
 
 ## Next Best Work
 
-1. Add deeper failure-injection verification drills for missing or corrupted chunks.
-2. Add additional notification channels and hook execution surfaces.
-3. Run a signed-tag release rehearsal and archive checksum, signature, and
+1. Run a signed-tag release rehearsal and archive checksum, signature, and
    attestation verification evidence.
-4. Add cloud-specific deployment overlays for common managed Kubernetes
-   environments.
