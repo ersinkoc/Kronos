@@ -1,6 +1,7 @@
 package docs_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -221,6 +222,79 @@ func TestSystemdUnitsExist(t *testing.T) {
 	}
 	if !strings.Contains(string(readme), "../contrib/systemd/README.md") {
 		t.Fatalf("operations.md missing systemd runbook link")
+	}
+}
+
+func TestGrafanaDashboardExampleExists(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join("..", "contrib", "grafana")
+	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(grafana README) error = %v", err)
+	}
+	for _, want := range []string{
+		"kronos-overview.json",
+		"Prometheus",
+		"control-plane build and uptime",
+		"backup freshness",
+	} {
+		if !strings.Contains(string(readme), want) {
+			t.Fatalf("contrib/grafana/README.md missing %q", want)
+		}
+	}
+
+	dashboardData, err := os.ReadFile(filepath.Join(root, "kronos-overview.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(kronos-overview.json) error = %v", err)
+	}
+	var dashboard struct {
+		Title      string `json:"title"`
+		UID        string `json:"uid"`
+		Templating struct {
+			List []struct {
+				Name string `json:"name"`
+				Type string `json:"type"`
+			} `json:"list"`
+		} `json:"templating"`
+		Panels []struct {
+			Title   string `json:"title"`
+			Targets []struct {
+				Expr string `json:"expr"`
+			} `json:"targets"`
+		} `json:"panels"`
+	}
+	if err := json.Unmarshal(dashboardData, &dashboard); err != nil {
+		t.Fatalf("invalid Grafana dashboard JSON: %v", err)
+	}
+	if dashboard.Title != "Kronos Overview" || dashboard.UID != "kronos-overview" {
+		t.Fatalf("unexpected dashboard identity: title=%q uid=%q", dashboard.Title, dashboard.UID)
+	}
+	if len(dashboard.Templating.List) == 0 || dashboard.Templating.List[0].Name != "datasource" || dashboard.Templating.List[0].Type != "datasource" {
+		t.Fatalf("dashboard missing datasource variable: %+v", dashboard.Templating.List)
+	}
+	dashboardText := string(dashboardData)
+	for _, want := range []string{
+		"kronos_build_info",
+		"kronos_process_uptime_seconds",
+		"kronos_agents_capacity",
+		"kronos_jobs_active_by_operation",
+		"kronos_backups_latest_completed_timestamp",
+		"kronos_backups_bytes_by_target",
+		"kronos_tokens_expired",
+		"kronos_auth_rate_limited_total",
+	} {
+		if !strings.Contains(dashboardText, want) {
+			t.Fatalf("dashboard missing %q", want)
+		}
+	}
+
+	operations, err := os.ReadFile("operations.md")
+	if err != nil {
+		t.Fatalf("ReadFile(operations.md) error = %v", err)
+	}
+	if !strings.Contains(string(operations), "../contrib/grafana/kronos-overview.json") {
+		t.Fatalf("operations.md missing Grafana dashboard link")
 	}
 }
 

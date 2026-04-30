@@ -322,6 +322,12 @@ groups:
           summary: Kronos has expired API tokens that can be cleaned up
 ```
 
+For Grafana, import the example overview dashboard from
+[contrib/grafana/kronos-overview.json](../contrib/grafana/kronos-overview.json)
+and select the Prometheus data source that scrapes the Kronos control-plane
+`/metrics` endpoint. Treat the packaged panels as starter SLO views; tune backup
+freshness, capacity, and token cleanup thresholds to match the deployment.
+
 ## Upgrade
 
 1. Build and test the release artifacts:
