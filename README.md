@@ -58,7 +58,8 @@ This repository currently has the Phase 0 foundation in place and active Phase
   SCRAM-SHA-256 auth, simple-query result decoding, catalog
   extension/enum/domain/sequence/table/column/constraint/index/view/routine/
   trigger discovery, and plain-SQL snapshot/restore paths behind
-  `protocol=native`.
+  `protocol=native`, with real-service integration coverage under the
+  PostgreSQL integration test tag.
   MySQL/MariaDB has a `mysqldump`/`mysql` logical MVP with real-service MySQL
   8.4, MariaDB 11.4, and bidirectional MySQL/MariaDB restore rehearsal
   coverage in CI, plus 10,000-row MySQL and MariaDB restore drills. MongoDB

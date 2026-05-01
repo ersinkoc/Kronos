@@ -50,7 +50,8 @@ flowchart LR
   is also present for TCP/TLS startup, cleartext, MD5, and SCRAM-SHA-256 auth,
   simple-query result decoding, catalog extension/enum/domain/sequence/table/column/constraint/
   index/view/routine/trigger discovery, and a plain-SQL snapshot/restore path
-  behind `protocol=native`.
+  behind `protocol=native`, with integration-tag coverage wired into the
+  PostgreSQL real-service test matrix.
 - MySQL/MariaDB logical driver MVP using `mysqldump`/`mysql` with real-service
   MySQL 8.4 and MariaDB 11.4 conformance plus bidirectional restore rehearsal
   coverage.

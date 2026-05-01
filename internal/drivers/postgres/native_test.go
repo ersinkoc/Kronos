@@ -235,6 +235,11 @@ func TestDriverBackupFullCanUseNativeProtocol(t *testing.T) {
 	if routineOffset < 0 || triggerOffset < 0 || routineOffset > triggerOffset {
 		t.Fatalf("routine must be dumped before trigger:\n%s", payload)
 	}
+	tableOffset := strings.Index(payload, `CREATE TABLE "public"."users"`)
+	ownershipOffset := strings.Index(payload, `ALTER SEQUENCE "public"."users_id_seq" OWNED BY "public"."users"."id";`)
+	if tableOffset < 0 || ownershipOffset < 0 || tableOffset > ownershipOffset {
+		t.Fatalf("sequence ownership must be dumped after table definition:\n%s", payload)
+	}
 	if len(queryer.queries) != 12 || !strings.Contains(queryer.queries[0], "pg_catalog.pg_class") || !strings.Contains(queryer.queries[1], "pg_catalog.pg_extension") || !strings.Contains(queryer.queries[2], "pg_catalog.pg_enum") || !strings.Contains(queryer.queries[3], "typtype = 'd'") || !strings.Contains(queryer.queries[4], "pg_catalog.pg_sequences") || !strings.Contains(queryer.queries[5], "pg_get_viewdef") || !strings.Contains(queryer.queries[6], "pg_get_functiondef") || !strings.Contains(queryer.queries[7], "pg_catalog.pg_attribute") || queryer.queries[8] != `select "id", "name" from "public"."users"` || !strings.Contains(queryer.queries[9], "pg_catalog.pg_constraint") || !strings.Contains(queryer.queries[10], "pg_catalog.pg_index") || !strings.Contains(queryer.queries[11], "pg_catalog.pg_trigger") {
 		t.Fatalf("native queries = %#v", queryer.queries)
 	}

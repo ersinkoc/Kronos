@@ -88,8 +88,9 @@ run.
   pgwire probe foundation for TCP/TLS startup, cleartext auth, MD5 auth,
   SCRAM-SHA-256 auth, simple-query result decoding, catalog
   extension/enum/domain/sequence/table/column/constraint/index/view/routine/
-  trigger discovery, and plain-SQL snapshot/restore output, tagged worker
-  pipeline smoke E2E coverage, CI real-service conformance coverage across
+  trigger discovery, plain-SQL snapshot/restore output, integration-tag native
+  protocol backup/restore coverage, tagged worker pipeline smoke E2E coverage,
+  CI real-service conformance coverage across
   PostgreSQL 15, 16, and 17,
   extension-backed data, large object checks, indexed JSONB bulk restore
   checks, optional

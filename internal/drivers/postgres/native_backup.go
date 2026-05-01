@@ -55,6 +55,7 @@ type pgNativeExtension struct {
 }
 
 type pgNativeType struct {
+	Schema     string
 	Definition string
 }
 
@@ -164,6 +165,9 @@ func pgNativeBackupFull(ctx context.Context, target drivers.Target, w drivers.Re
 	}
 	for _, dump := range dumps {
 		writeNativeTableDefinition(&payload, dump.Table, dump.Columns)
+	}
+	for _, sequence := range sequences {
+		writeNativeSequenceOwnership(&payload, sequence)
 	}
 	for _, dump := range dumps {
 		writeNativeTableData(&payload, dump.Table, dump.Columns, dump.Rows)
@@ -276,6 +280,7 @@ order by n.nspname, t.typname`
 			continue
 		}
 		types = append(types, pgNativeType{
+			Schema:     row["schema_name"],
 			Definition: fmt.Sprintf("CREATE TYPE %s AS ENUM (%s);", quotePGQualifiedName(row["schema_name"], row["type_name"]), row["enum_labels"]),
 		})
 	}
@@ -324,7 +329,7 @@ order by n.nspname, t.typname`
 			definition.WriteString(row["constraints"])
 		}
 		definition.WriteByte(';')
-		types = append(types, pgNativeType{Definition: definition.String()})
+		types = append(types, pgNativeType{Schema: row["schema_name"], Definition: definition.String()})
 	}
 	return types, nil
 }
@@ -603,6 +608,9 @@ func pgNativeReadTable(ctx context.Context, target drivers.Target, queryer pgNat
 }
 
 func writeNativeExtensionDefinition(w *bytes.Buffer, extension pgNativeExtension) {
+	if extension.Schema != "" && extension.Schema != "public" {
+		fmt.Fprintf(w, "CREATE SCHEMA IF NOT EXISTS %s;\n", quotePGIdentifier(extension.Schema))
+	}
 	fmt.Fprintf(w, "CREATE EXTENSION IF NOT EXISTS %s", quotePGIdentifier(extension.Name))
 	if extension.Schema != "" {
 		fmt.Fprintf(w, " WITH SCHEMA %s", quotePGIdentifier(extension.Schema))
@@ -617,6 +625,9 @@ func writeNativeTypeDefinition(w *bytes.Buffer, typ pgNativeType) {
 	definition := strings.TrimSpace(typ.Definition)
 	if definition == "" {
 		return
+	}
+	if typ.Schema != "" && typ.Schema != "public" {
+		fmt.Fprintf(w, "CREATE SCHEMA IF NOT EXISTS %s;\n", quotePGIdentifier(typ.Schema))
 	}
 	if !strings.HasSuffix(definition, ";") {
 		definition += ";"
@@ -644,10 +655,14 @@ func writeNativeSequenceDefinition(w *bytes.Buffer, sequence pgNativeSequence) {
 		w.WriteString(" NO CYCLE")
 	}
 	w.WriteString(";\n")
-	if sequence.OwnedSchema != "" && sequence.OwnedTable != "" && sequence.OwnedColumn != "" {
-		fmt.Fprintf(w, "ALTER SEQUENCE %s OWNED BY %s.%s;\n", quotePGQualifiedName(sequence.Schema, sequence.Name), quotePGQualifiedName(sequence.OwnedSchema, sequence.OwnedTable), quotePGIdentifier(sequence.OwnedColumn))
-	}
 	w.WriteByte('\n')
+}
+
+func writeNativeSequenceOwnership(w *bytes.Buffer, sequence pgNativeSequence) {
+	if sequence.OwnedSchema == "" || sequence.OwnedTable == "" || sequence.OwnedColumn == "" {
+		return
+	}
+	fmt.Fprintf(w, "ALTER SEQUENCE %s OWNED BY %s.%s;\n\n", quotePGQualifiedName(sequence.Schema, sequence.Name), quotePGQualifiedName(sequence.OwnedSchema, sequence.OwnedTable), quotePGIdentifier(sequence.OwnedColumn))
 }
 
 func writeNativeSequenceSetValue(w *bytes.Buffer, sequence pgNativeSequence) {

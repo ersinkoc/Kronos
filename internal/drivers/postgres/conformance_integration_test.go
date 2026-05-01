@@ -208,6 +208,107 @@ select kronos_missing_restore_function();
 	}
 }
 
+func TestPostgresNativeProtocolBackupRestore(t *testing.T) {
+	sourceDSN := strings.TrimSpace(os.Getenv("KRONOS_POSTGRES_TEST_DSN"))
+	if sourceDSN == "" {
+		t.Skip("KRONOS_POSTGRES_TEST_DSN is not set")
+	}
+	requireCommand(t, "psql")
+
+	timeoutSeconds := envInt("KRONOS_POSTGRES_TEST_TIMEOUT_SECONDS", 30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+
+	suffix := randomHex(t, 4)
+	schema := "kronos_native_" + suffix
+	cleanupSchema(t, ctx, sourceDSN, schema)
+	defer cleanupSchema(t, context.Background(), sourceDSN, schema)
+
+	seedSQL := fmt.Sprintf(`
+create schema %s;
+create type %s.user_status as enum ('active', 'blocked');
+create domain %s.email_address as text not null check (value like '%%@%%');
+create table %s.users(
+  id serial primary key,
+  status %s.user_status not null default 'active',
+  email %s.email_address not null,
+  name text not null,
+  updated_at timestamptz
+);
+create function %s.touch_updated_at() returns trigger
+language plpgsql
+as $$ begin new.updated_at = now(); return new; end $$;
+create trigger users_touch_updated_at before update on %s.users
+for each row execute function %s.touch_updated_at();
+create index users_name_idx on %s.users(name);
+create view %s.active_users as select id, name from %s.users where status = 'active';
+create materialized view %s.user_counts as select status, count(*)::integer as count from %s.users group by status;
+insert into %s.users(email, name) values ('ada@example.com', 'Ada'), ('grace@example.com', 'Grace');
+`, schema, schema, schema, schema, schema, schema, schema, schema, schema, schema, schema, schema, schema, schema, schema)
+	runPSQL(t, ctx, sourceDSN, seedSQL)
+
+	driver := NewDriver()
+	var backup drivers.MemoryRecordStream
+	if _, err := driver.BackupFull(ctx, drivers.Target{
+		Connection: map[string]string{"dsn": sourceDSN},
+		Options:    map[string]string{"protocol": "native"},
+	}, &backup); err != nil {
+		t.Fatalf("BackupFull(native) error = %v", err)
+	}
+	records := backup.Records()
+	if len(records) != 2 || records[0].Object.Kind != databaseObjectKind || !records[1].Done {
+		t.Fatalf("native backup records = %#v", records)
+	}
+	payload := string(records[0].Payload)
+	for _, want := range []string{
+		fmt.Sprintf("CREATE TYPE \"%s\".\"user_status\" AS ENUM", schema),
+		fmt.Sprintf("CREATE DOMAIN \"%s\".\"email_address\"", schema),
+		fmt.Sprintf("CREATE SEQUENCE \"%s\".\"users_id_seq\"", schema),
+		fmt.Sprintf("CREATE TABLE \"%s\".\"users\"", schema),
+		fmt.Sprintf("CREATE FUNCTION %s.touch_updated_at()", schema),
+		"CREATE TRIGGER users_touch_updated_at",
+		fmt.Sprintf("CREATE VIEW \"%s\".\"active_users\"", schema),
+		fmt.Sprintf("CREATE MATERIALIZED VIEW \"%s\".\"user_counts\"", schema),
+	} {
+		if !strings.Contains(payload, want) {
+			t.Fatalf("native backup payload missing %q:\n%s", want, payload)
+		}
+	}
+
+	cleanupSchema(t, ctx, sourceDSN, schema)
+	var restore drivers.MemoryRecordStream
+	writeRecords(t, &restore, records)
+	if err := driver.Restore(ctx, drivers.Target{
+		Connection: map[string]string{"dsn": sourceDSN},
+		Options:    map[string]string{"protocol": "native"},
+	}, &restore, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
+		t.Fatalf("Restore(native) error = %v", err)
+	}
+
+	count := queryScalar(t, ctx, sourceDSN, fmt.Sprintf("select count(*) from %s.users;", schema))
+	if count != "2" {
+		t.Fatalf("native restored row count = %q, want 2", count)
+	}
+	viewCount := queryScalar(t, ctx, sourceDSN, fmt.Sprintf("select count(*) from %s.active_users;", schema))
+	if viewCount != "2" {
+		t.Fatalf("native restored view count = %q, want 2", viewCount)
+	}
+	materializedPopulated := queryScalar(t, ctx, sourceDSN, fmt.Sprintf("select ispopulated from pg_matviews where schemaname = '%s' and matviewname = 'user_counts';", schema))
+	if materializedPopulated != "f" {
+		t.Fatalf("native restored matview populated = %q, want f", materializedPopulated)
+	}
+	runPSQL(t, ctx, sourceDSN, fmt.Sprintf("update %s.users set name = 'Ada Lovelace' where id = 1;", schema))
+	triggerSetTimestamp := queryScalar(t, ctx, sourceDSN, fmt.Sprintf("select updated_at is not null from %s.users where id = 1;", schema))
+	if triggerSetTimestamp != "t" {
+		t.Fatalf("native restored trigger updated_at = %q, want t", triggerSetTimestamp)
+	}
+	runPSQL(t, ctx, sourceDSN, fmt.Sprintf("insert into %s.users(email, name) values ('katherine@example.com', 'Katherine');", schema))
+	nextID := queryScalar(t, ctx, sourceDSN, fmt.Sprintf("select max(id)::text from %s.users;", schema))
+	if nextID != "3" {
+		t.Fatalf("native restored sequence max id = %q, want 3", nextID)
+	}
+}
+
 func requireCommand(t *testing.T, name string) {
 	t.Helper()
 
