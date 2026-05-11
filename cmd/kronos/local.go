@@ -69,7 +69,7 @@ func runLocal(ctx context.Context, out io.Writer, args []string) error {
 	cfg.Server.DataDir = *dataDir
 	allowNoAuth := *devInsecure || isLoopbackListenAddress(*listenAddr)
 	if !*work {
-		return serveControlPlaneWithOptions(ctx, out, *listenAddr, cfg, controlPlaneOptions{InsecureNoAuth: allowNoAuth})
+		return serveControlPlaneWithOptions(ctx, out, *listenAddr, "", cfg, controlPlaneOptions{InsecureNoAuth: allowNoAuth})
 	}
 
 	localCtx, cancel := context.WithCancel(ctx)
@@ -100,7 +100,7 @@ func runLocal(ctx context.Context, out io.Writer, args []string) error {
 		}()
 		return nil
 	}
-	err := serveControlPlaneWithOptions(localCtx, out, *listenAddr, cfg, controlPlaneOptions{OnListen: startWorker, InsecureNoAuth: allowNoAuth})
+	err := serveControlPlaneWithOptions(localCtx, out, *listenAddr, "", cfg, controlPlaneOptions{OnListen: startWorker, InsecureNoAuth: allowNoAuth})
 	select {
 	case workerRunErr := <-workerErr:
 		if workerRunErr != nil && !errors.Is(workerRunErr, context.Canceled) {

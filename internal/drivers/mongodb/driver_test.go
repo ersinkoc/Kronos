@@ -15,7 +15,7 @@ import (
 func TestDriverNameVersionTestAndUnsupportedIncremental(t *testing.T) {
 	t.Parallel()
 
-	runner := &fakeRunner{outputs: [][]byte{[]byte("mongodump version: 100.12.0\n"), []byte("archive")}}
+	runner := &fakeRunner{outputs: [][]byte{[]byte("mongodump version: 100.12.0\n"), []byte("1\n")}}
 	driver := &Driver{runner: runner}
 	if driver.Name() != "mongodb" {
 		t.Fatalf("Name() = %q", driver.Name())
@@ -27,7 +27,7 @@ func TestDriverNameVersionTestAndUnsupportedIncremental(t *testing.T) {
 	if version != "mongodump version: 100.12.0" {
 		t.Fatalf("Version() = %q", version)
 	}
-	if err := driver.Test(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}}); err != nil {
+	if err := driver.Test(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}, Options: map[string]string{"protocol": "mongodump"}}); err != nil {
 		t.Fatalf("Test() error = %v", err)
 	}
 	if _, err := driver.BackupIncremental(context.Background(), drivers.Target{}, manifest.Manifest{}, nil); !errors.Is(err, drivers.ErrIncrementalUnsupported) {
@@ -54,7 +54,7 @@ func TestDriverBackupFullUsesMongoDumpArchive(t *testing.T) {
 			"username": "backup",
 			"password": "secret",
 		},
-		Options: map[string]string{"authSource": "admin", "tls": "true"},
+		Options: map[string]string{"authSource": "admin", "tls": "true", "protocol": "mongodump"},
 	}
 	var stream drivers.MemoryRecordStream
 	rp, err := driver.BackupFull(context.Background(), target, &stream)
@@ -96,7 +96,7 @@ func TestDriverBackupFullUsesOplogReplicaSetArchive(t *testing.T) {
 			"username": "backup",
 			"password": "secret",
 		},
-		Options: map[string]string{"authSource": "admin", "oplog": "true"},
+		Options: map[string]string{"authSource": "admin", "oplog": "true", "protocol": "mongodump"},
 	}
 	var stream drivers.MemoryRecordStream
 	rp, err := driver.BackupFull(context.Background(), target, &stream)
@@ -138,7 +138,7 @@ func TestDriverBackupFullRejectsDatabaseScopedOplogTarget(t *testing.T) {
 	driver := &Driver{runner: runner}
 	target := drivers.Target{
 		Connection: map[string]string{"database": "app"},
-		Options:    map[string]string{"oplog": "true"},
+		Options:    map[string]string{"oplog": "true", "protocol": "mongodump"},
 	}
 	var stream drivers.MemoryRecordStream
 	_, err := driver.BackupFull(context.Background(), target, &stream)
@@ -154,7 +154,7 @@ func TestDriverBackupFullRejectsURIPathScopedOplogTarget(t *testing.T) {
 	driver := &Driver{runner: runner}
 	target := drivers.Target{
 		Connection: map[string]string{"uri": "mongodb://backup:secret@mongo.example:27018/app?authSource=admin"},
-		Options:    map[string]string{"oplog": "true"},
+		Options:    map[string]string{"oplog": "true", "protocol": "mongodump"},
 	}
 	var stream drivers.MemoryRecordStream
 	_, err := driver.BackupFull(context.Background(), target, &stream)
@@ -180,7 +180,7 @@ func TestDriverRestoreUsesMongoRestoreArchive(t *testing.T) {
 	if err := stream.WriteRecord(drivers.ObjectRef{Name: "source", Kind: databaseObjectKind}, []byte("archive-bytes")); err != nil {
 		t.Fatalf("WriteRecord() error = %v", err)
 	}
-	target := drivers.Target{Connection: map[string]string{"database": "target"}}
+	target := drivers.Target{Connection: map[string]string{"database": "target"}, Options: map[string]string{"protocol": "mongodump"}}
 	if err := driver.Restore(context.Background(), target, &stream, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
 		t.Fatalf("Restore() error = %v", err)
 	}
@@ -204,7 +204,7 @@ func TestDriverRestoreUsesOplogReplayForReplicaSetArchive(t *testing.T) {
 	if err := stream.WriteRecord(drivers.ObjectRef{Name: "replica-set", Kind: deploymentObjectKind}, []byte("archive-bytes")); err != nil {
 		t.Fatalf("WriteRecord() error = %v", err)
 	}
-	target := drivers.Target{Connection: map[string]string{"addr": "mongo.example:27018"}}
+	target := drivers.Target{Connection: map[string]string{"addr": "mongo.example:27018"}, Options: map[string]string{"protocol": "mongodump"}}
 	if err := driver.Restore(context.Background(), target, &stream, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
 		t.Fatalf("Restore() error = %v", err)
 	}
@@ -231,7 +231,7 @@ func TestDriverRestoreRejectsDatabaseScopedOplogTarget(t *testing.T) {
 	if err := stream.WriteRecord(drivers.ObjectRef{Name: "replica-set", Kind: deploymentObjectKind}, []byte("archive-bytes")); err != nil {
 		t.Fatalf("WriteRecord() error = %v", err)
 	}
-	target := drivers.Target{Connection: map[string]string{"database": "target"}}
+	target := drivers.Target{Connection: map[string]string{"database": "target"}, Options: map[string]string{"protocol": "mongodump"}}
 	err := driver.Restore(context.Background(), target, &stream, drivers.RestoreOptions{ReplaceExisting: true})
 	if err == nil || !strings.Contains(err.Error(), "full replica-set target") {
 		t.Fatalf("Restore() error = %v, want full replica-set target guard", err)
@@ -257,7 +257,7 @@ func TestDriverRestoreFailureCleansTemporaryConfig(t *testing.T) {
 			"username": "backup",
 			"password": "secret",
 		},
-		Options: map[string]string{"authSource": "admin"},
+		Options: map[string]string{"authSource": "admin", "protocol": "mongodump"},
 	}
 	err := driver.Restore(context.Background(), target, &stream, drivers.RestoreOptions{ReplaceExisting: true})
 	if err == nil || !strings.Contains(err.Error(), "restore failed") {
@@ -298,7 +298,7 @@ func TestDriverRestoreDryRunSkipsMongoRestore(t *testing.T) {
 	if err := stream.WriteRecord(drivers.ObjectRef{Name: "app", Kind: databaseObjectKind}, []byte("archive")); err != nil {
 		t.Fatalf("WriteRecord() error = %v", err)
 	}
-	if err := driver.Restore(context.Background(), drivers.Target{}, &stream, drivers.RestoreOptions{DryRun: true}); err != nil {
+	if err := driver.Restore(context.Background(), drivers.Target{Options: map[string]string{"protocol": "mongodump"}}, &stream, drivers.RestoreOptions{DryRun: true}); err != nil {
 		t.Fatalf("Restore(dry-run) error = %v", err)
 	}
 	if len(runner.calls) != 0 {
@@ -319,7 +319,7 @@ func TestDriverStreamWaitsForContext(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := NewDriver().Stream(ctx, drivers.Target{}, drivers.ResumePoint{}, nil)
+	err := NewDriver().Stream(ctx, drivers.Target{Options: map[string]string{"protocol": "mongodump"}}, drivers.ResumePoint{}, nil)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Stream(canceled) error = %v, want context.Canceled", err)
 	}
@@ -328,7 +328,7 @@ func TestDriverStreamWaitsForContext(t *testing.T) {
 func TestDriverReplayStreamUnsupported(t *testing.T) {
 	t.Parallel()
 
-	if err := NewDriver().ReplayStream(context.Background(), drivers.Target{}, nil, drivers.ReplayTarget{}); !errors.Is(err, drivers.ErrIncrementalUnsupported) {
+	if err := NewDriver().ReplayStream(context.Background(), drivers.Target{Options: map[string]string{"protocol": "mongodump"}}, nil, drivers.ReplayTarget{}); !errors.Is(err, drivers.ErrIncrementalUnsupported) {
 		t.Fatalf("ReplayStream() error = %v, want incremental unsupported", err)
 	}
 }

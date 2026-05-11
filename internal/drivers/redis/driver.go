@@ -12,6 +12,32 @@ import (
 	"github.com/kronos/kronos/internal/manifest"
 )
 
+func useRedisNativeProtocol(target drivers.Target) bool {
+	value := strings.ToLower(strings.TrimSpace(firstNonEmpty(
+		target.Connection["protocol"],
+		target.Connection["native_protocol"],
+		target.Connection["native"],
+		target.Options["protocol"],
+		target.Options["native_protocol"],
+		target.Options["native"],
+	)))
+	switch value {
+	case "scan+dump", "shell", "external":
+		return false
+	default:
+		return true
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 // Driver implements Redis/Valkey logical backup via SCAN + DUMP.
 type Driver struct {
 	dial func(context.Context, drivers.Target) (commander, error)
@@ -103,15 +129,35 @@ func (d *Driver) BackupFull(ctx context.Context, target drivers.Target, w driver
 	return drivers.ResumePoint{Driver: d.Name(), Position: "scan:0"}, nil
 }
 
-// BackupIncremental is not supported by Redis SCAN/DUMP logical backups.
-func (d *Driver) BackupIncremental(context.Context, drivers.Target, manifest.Manifest, drivers.RecordWriter) (drivers.ResumePoint, error) {
-	return drivers.ResumePoint{}, drivers.ErrIncrementalUnsupported
+// BackupIncremental captures replication state for incremental backup.
+func (d *Driver) BackupIncremental(ctx context.Context, target drivers.Target, parent manifest.Manifest, w drivers.RecordWriter) (drivers.ResumePoint, error) {
+	if !useRedisNativeProtocol(target) {
+		return drivers.ResumePoint{}, drivers.ErrIncrementalUnsupported
+	}
+	if w == nil {
+		return drivers.ResumePoint{}, fmt.Errorf("record writer is required")
+	}
+	return d.BackupIncrementalPSYNC(ctx, target, parent, w)
 }
 
-// Stream is reserved for PSYNC/AOF-like capture.
+// Stream streams replication commands for PITR.
 func (d *Driver) Stream(ctx context.Context, target drivers.Target, rp drivers.ResumePoint, w drivers.StreamWriter) error {
-	<-ctx.Done()
-	return ctx.Err()
+	if !useRedisNativeProtocol(target) {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	if rp.Driver == "" || rp.Position == "" {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	if w == nil {
+		return fmt.Errorf("stream writer is required")
+	}
+	client, err := d.connect(ctx, target)
+	if err != nil {
+		return err
+	}
+	return d.psyncStreaming(ctx, target, rp, w, client)
 }
 
 // Restore applies DUMP records using RESTORE.

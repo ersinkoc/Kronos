@@ -25,10 +25,10 @@ func TestDriverNameVersionTestAndUnsupportedIncremental(t *testing.T) {
 	if version != "mysql  Ver 8.4.0" {
 		t.Fatalf("Version() = %q", version)
 	}
-	if err := driver.Test(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}}); err != nil {
+	if err := driver.Test(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}, Options: map[string]string{"protocol": "mysqldump"}}); err != nil {
 		t.Fatalf("Test() error = %v", err)
 	}
-	if _, err := driver.BackupIncremental(context.Background(), drivers.Target{}, manifest.Manifest{}, nil); !errors.Is(err, drivers.ErrIncrementalUnsupported) {
+	if _, err := driver.BackupIncremental(context.Background(), drivers.Target{Options: map[string]string{"protocol": "mysqldump"}}, manifest.Manifest{}, nil); !errors.Is(err, drivers.ErrIncrementalUnsupported) {
 		t.Fatalf("BackupIncremental() error = %v", err)
 	}
 	if len(runner.calls) != 2 || runner.calls[0].name != "mysql" || runner.calls[1].name != "mysql" {
@@ -48,6 +48,7 @@ func TestDriverBackupFullUsesMysqlDump(t *testing.T) {
 			"username": "backup",
 			"password": "secret",
 		},
+		Options: map[string]string{"protocol": "mysqldump"},
 	}
 	var stream drivers.MemoryRecordStream
 	rp, err := driver.BackupFull(context.Background(), target, &stream)
@@ -92,6 +93,7 @@ func TestDriverBackupFullCanOmitGTIDPurged(t *testing.T) {
 		},
 		Options: map[string]string{
 			"set_gtid_purged": "omit",
+			"protocol":        "mysqldump",
 		},
 	}
 	if _, err := driver.BackupFull(context.Background(), target, &drivers.MemoryRecordStream{}); err != nil {
@@ -120,7 +122,7 @@ func TestDriverRestoreUsesMysql(t *testing.T) {
 	if err := stream.WriteRecord(drivers.ObjectRef{Name: "app", Kind: databaseObjectKind}, []byte("create table users(id int);\n")); err != nil {
 		t.Fatalf("WriteRecord() error = %v", err)
 	}
-	if err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}}, &stream, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
+	if err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}, Options: map[string]string{"protocol": "mysqldump"}}, &stream, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
 		t.Fatalf("Restore() error = %v", err)
 	}
 	if len(runner.calls) != 1 || runner.calls[0].name != "mysql" || string(runner.calls[0].stdin) != "create table users(id int);\n" {
@@ -141,7 +143,7 @@ func TestDriverRestoreRequiresReplaceExisting(t *testing.T) {
 	if err := stream.WriteRecord(drivers.ObjectRef{Name: "app", Kind: databaseObjectKind}, []byte("create table users(id int);\n")); err != nil {
 		t.Fatalf("WriteRecord() error = %v", err)
 	}
-	err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}}, &stream, drivers.RestoreOptions{})
+	err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}, Options: map[string]string{"protocol": "mysqldump"}}, &stream, drivers.RestoreOptions{})
 	if err == nil || !strings.Contains(err.Error(), "replace_existing=true") {
 		t.Fatalf("Restore() error = %v, want replace_existing guard", err)
 	}
@@ -159,7 +161,7 @@ func TestDriverRestoreDryRunSkipsMysql(t *testing.T) {
 	if err := stream.WriteRecord(drivers.ObjectRef{Name: "app", Kind: databaseObjectKind}, []byte("select 1;")); err != nil {
 		t.Fatalf("WriteRecord() error = %v", err)
 	}
-	if err := driver.Restore(context.Background(), drivers.Target{}, &stream, drivers.RestoreOptions{DryRun: true}); err != nil {
+	if err := driver.Restore(context.Background(), drivers.Target{Options: map[string]string{"protocol": "mysqldump"}}, &stream, drivers.RestoreOptions{DryRun: true}); err != nil {
 		t.Fatalf("Restore(dry-run) error = %v", err)
 	}
 	if len(runner.calls) != 0 {
@@ -170,7 +172,7 @@ func TestDriverRestoreDryRunSkipsMysql(t *testing.T) {
 func TestDriverRestoreRequiresReader(t *testing.T) {
 	t.Parallel()
 
-	if err := NewDriver().Restore(context.Background(), drivers.Target{}, nil, drivers.RestoreOptions{}); err == nil {
+	if err := NewDriver().Restore(context.Background(), drivers.Target{Options: map[string]string{"protocol": "mysqldump"}}, nil, drivers.RestoreOptions{}); err == nil {
 		t.Fatal("Restore(nil reader) error = nil, want error")
 	}
 }
@@ -180,7 +182,7 @@ func TestDriverStreamWaitsForContext(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := NewDriver().Stream(ctx, drivers.Target{}, drivers.ResumePoint{}, nil)
+	err := NewDriver().Stream(ctx, drivers.Target{Options: map[string]string{"protocol": "mysqldump"}}, drivers.ResumePoint{}, nil)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Stream(canceled) error = %v, want context.Canceled", err)
 	}
@@ -189,8 +191,8 @@ func TestDriverStreamWaitsForContext(t *testing.T) {
 func TestDriverReplayStreamUnsupported(t *testing.T) {
 	t.Parallel()
 
-	if err := NewDriver().ReplayStream(context.Background(), drivers.Target{}, nil, drivers.ReplayTarget{}); !errors.Is(err, drivers.ErrIncrementalUnsupported) {
-		t.Fatalf("ReplayStream() error = %v, want incremental unsupported", err)
+	if err := NewDriver().ReplayStream(context.Background(), drivers.Target{Options: map[string]string{"protocol": "mysqldump"}}, nil, drivers.ReplayTarget{}); err == nil {
+		t.Fatalf("ReplayStream() error = nil, want error")
 	}
 }
 

@@ -24,6 +24,7 @@ type Config struct {
 // ServerConfig configures the control-plane server.
 type ServerConfig struct {
 	Listen              string     `json:"listen" yaml:"listen"`
+	GRPCListen          string     `json:"grpc_listen,omitempty" yaml:"grpc_listen,omitempty"`
 	ListenWebUI         string     `json:"listen_webui,omitempty" yaml:"listen_webui,omitempty"`
 	DataDir             string     `json:"data_dir" yaml:"data_dir"`
 	TLS                 TLSConfig  `json:"tls,omitempty" yaml:"tls,omitempty"`

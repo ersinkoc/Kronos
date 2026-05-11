@@ -21,9 +21,10 @@ const (
 	deploymentObjectKind = "deployment"
 )
 
-// Driver implements MongoDB logical backups with mongodump archive output.
+// Driver implements MongoDB logical backups with mongodump or native protocol.
 type Driver struct {
 	runner commandRunner
+	native mongoQueryer
 }
 
 type commandRunner interface {
@@ -34,7 +35,7 @@ type execRunner struct{}
 
 // NewDriver returns a MongoDB driver.
 func NewDriver() *Driver {
-	return &Driver{runner: execRunner{}}
+	return &Driver{runner: execRunner{}, native: mongoRunner{}}
 }
 
 // Name returns the driver name.
@@ -53,6 +54,14 @@ func (d *Driver) Version(ctx context.Context, target drivers.Target) (string, er
 
 // Test validates that mongodump can connect to the target database.
 func (d *Driver) Test(ctx context.Context, target drivers.Target) error {
+	if useMongoNativeProtocol(target) {
+		queryer := d.native
+		if queryer == nil {
+			queryer = mongoRunner{}
+		}
+		_, err := queryer.SimpleQuery(ctx, target, "ping")
+		return err
+	}
 	args, cleanup, err := mongoDatabaseDumpArgs(target)
 	if err != nil {
 		return err
@@ -63,10 +72,17 @@ func (d *Driver) Test(ctx context.Context, target drivers.Target) error {
 	return err
 }
 
-// BackupFull emits one MongoDB archive record from mongodump.
+// BackupFull emits one MongoDB archive record from mongodump or native protocol.
 func (d *Driver) BackupFull(ctx context.Context, target drivers.Target, w drivers.RecordWriter) (drivers.ResumePoint, error) {
 	if w == nil {
 		return drivers.ResumePoint{}, fmt.Errorf("record writer is required")
+	}
+	if useMongoNativeProtocol(target) {
+		queryer := d.native
+		if queryer == nil {
+			queryer = mongoRunner{}
+		}
+		return mongoNativeBackupFull(ctx, target, w, queryer)
 	}
 	args, cleanup, err := mongoDumpArgs(target)
 	if err != nil {
@@ -91,21 +107,55 @@ func (d *Driver) BackupFull(ctx context.Context, target drivers.Target, w driver
 	return drivers.ResumePoint{Driver: d.Name(), Position: position}, nil
 }
 
-// BackupIncremental is not supported by mongodump logical backups.
-func (d *Driver) BackupIncremental(context.Context, drivers.Target, manifest.Manifest, drivers.RecordWriter) (drivers.ResumePoint, error) {
-	return drivers.ResumePoint{}, drivers.ErrIncrementalUnsupported
+// BackupIncremental captures oplog or change stream for incremental backup.
+func (d *Driver) BackupIncremental(ctx context.Context, target drivers.Target, parent manifest.Manifest, w drivers.RecordWriter) (drivers.ResumePoint, error) {
+	if !useMongoNativeProtocol(target) {
+		return drivers.ResumePoint{}, drivers.ErrIncrementalUnsupported
+	}
+	if !mongoOplogEnabled(target) {
+		return drivers.ResumePoint{}, drivers.ErrIncrementalUnsupported
+	}
+	if w == nil {
+		return drivers.ResumePoint{}, fmt.Errorf("record writer is required")
+	}
+	queryer := d.native
+	if queryer == nil {
+		queryer = mongoRunner{}
+	}
+	return mongoNativeBackupIncremental(ctx, target, parent, w, queryer)
 }
 
-// Stream is reserved for oplog/change-stream capture.
-func (d *Driver) Stream(ctx context.Context, _ drivers.Target, _ drivers.ResumePoint, _ drivers.StreamWriter) error {
-	<-ctx.Done()
-	return ctx.Err()
+// Stream streams oplog or change stream events for PITR.
+func (d *Driver) Stream(ctx context.Context, target drivers.Target, rp drivers.ResumePoint, w drivers.StreamWriter) error {
+	if !useMongoNativeProtocol(target) {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	if w == nil {
+		return fmt.Errorf("stream writer is required")
+	}
+	if rp.Driver == "" || rp.Position == "" {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	queryer := d.native
+	if queryer == nil {
+		queryer = mongoRunner{}
+	}
+	return mongoNativeStream(ctx, target, rp, w, queryer)
 }
 
-// Restore applies MongoDB archive records through mongorestore.
+// Restore applies MongoDB archive records through mongorestore or native protocol.
 func (d *Driver) Restore(ctx context.Context, target drivers.Target, r drivers.RecordReader, opts drivers.RestoreOptions) error {
 	if r == nil {
 		return fmt.Errorf("record reader is required")
+	}
+	if useMongoNativeProtocol(target) {
+		queryer := d.native
+		if queryer == nil {
+			queryer = mongoRunner{}
+		}
+		return mongoNativeRestore(ctx, target, r, opts, queryer)
 	}
 	for {
 		record, err := r.NextRecord()
@@ -142,9 +192,19 @@ func (d *Driver) Restore(ctx context.Context, target drivers.Target, r drivers.R
 	}
 }
 
-// ReplayStream is reserved for oplog/change-stream replay.
-func (d *Driver) ReplayStream(context.Context, drivers.Target, drivers.StreamReader, drivers.ReplayTarget) error {
-	return drivers.ErrIncrementalUnsupported
+// ReplayStream replays change stream or oplog events for PITR.
+func (d *Driver) ReplayStream(ctx context.Context, target drivers.Target, r drivers.StreamReader, targetPoint drivers.ReplayTarget) error {
+	if !useMongoNativeProtocol(target) {
+		return drivers.ErrIncrementalUnsupported
+	}
+	if r == nil {
+		return fmt.Errorf("stream reader is required")
+	}
+	queryer := d.native
+	if queryer == nil {
+		queryer = mongoRunner{}
+	}
+	return mongoNativeReplayStream(ctx, target, r, targetPoint, queryer)
 }
 
 func (d *Driver) run(ctx context.Context, name string, args []string, stdin []byte) ([]byte, error) {

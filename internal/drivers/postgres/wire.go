@@ -35,6 +35,67 @@ type pgQueryResult struct {
 	Command string
 }
 
+func pgCopyBinaryOut(rw io.ReadWriter, params map[string]string, password string, table string) (io.ReadCloser, error) {
+	if err := writeStartupMessage(rw, params); err != nil {
+		return nil, err
+	}
+	if err := readStartupReady(rw, params["user"], password); err != nil {
+		return nil, err
+	}
+	copyQuery := fmt.Sprintf("COPY %s TO STDOUT WITH BINARY", table)
+	if err := writeTypedMessage(rw, 'Q', []byte(copyQuery+"\x00")); err != nil {
+		return nil, err
+	}
+	// Wait for CopyInResponse ('W')
+	msg, err := readPGMessage(rw)
+	if err != nil {
+		return nil, err
+	}
+	if msg.Type != 'W' {
+		if msg.Type == 'E' {
+			return nil, parseErrorResponse(msg.Payload)
+		}
+		return nil, fmt.Errorf("expected CopyInResponse 'W', got %q", msg.Type)
+	}
+	return &pgCopyReader{rw: rw}, nil
+}
+
+type pgCopyReader struct {
+	rw   io.ReadWriter
+	done bool
+}
+
+func (r *pgCopyReader) Read(p []byte) (int, error) {
+	if r.done {
+		return 0, io.EOF
+	}
+	msg, err := readPGMessage(r.rw)
+	if err != nil {
+		return 0, err
+	}
+	switch msg.Type {
+	case 'd': // CopyData
+		n := copy(p, msg.Payload)
+		if n < len(msg.Payload) {
+			return n, io.ErrShortBuffer
+		}
+		return n, nil
+	case 'C': // CopyDone
+		r.done = true
+		return 0, io.EOF
+	case 'E': // ErrorResponse
+		r.done = true
+		return 0, parseErrorResponse(msg.Payload)
+	default:
+		r.done = true
+		return 0, fmt.Errorf("unexpected COPY message during data phase: %q", msg.Type)
+	}
+}
+
+func (r *pgCopyReader) Close() error {
+	return nil
+}
+
 func pgSimpleQuery(rw io.ReadWriter, params map[string]string, password string, query string) (pgQueryResult, error) {
 	if err := writeStartupMessage(rw, params); err != nil {
 		return pgQueryResult{}, err

@@ -16,9 +16,10 @@ import (
 
 const databaseObjectKind = "database"
 
-// Driver implements MySQL/MariaDB logical backups with mysqldump.
+// Driver implements MySQL/MariaDB logical backups with mysqldump or native protocol.
 type Driver struct {
 	runner commandRunner
+	native mysqlQueryer
 }
 
 type commandRunner interface {
@@ -29,7 +30,7 @@ type execRunner struct{}
 
 // NewDriver returns a MySQL driver.
 func NewDriver() *Driver {
-	return &Driver{runner: execRunner{}}
+	return &Driver{runner: execRunner{}, native: mysqlRunner{}}
 }
 
 // Name returns the driver name.
@@ -48,14 +49,29 @@ func (d *Driver) Version(ctx context.Context, target drivers.Target) (string, er
 
 // Test validates that mysql can connect and run a trivial query.
 func (d *Driver) Test(ctx context.Context, target drivers.Target) error {
+	if useNativeProtocol(target) {
+		queryer := d.native
+		if queryer == nil {
+			queryer = mysqlRunner{}
+		}
+		_, err := queryer.SimpleQuery(ctx, target, "SELECT 1")
+		return err
+	}
 	_, err := d.run(ctx, "mysql", append(mysqlArgs(target), "--execute", "SELECT 1"), nil, mysqlEnv(target))
 	return err
 }
 
-// BackupFull emits one logical SQL dump record from mysqldump.
+// BackupFull emits one logical SQL dump record from mysqldump or native protocol.
 func (d *Driver) BackupFull(ctx context.Context, target drivers.Target, w drivers.RecordWriter) (drivers.ResumePoint, error) {
 	if w == nil {
 		return drivers.ResumePoint{}, fmt.Errorf("record writer is required")
+	}
+	if useNativeProtocol(target) {
+		queryer := d.native
+		if queryer == nil {
+			queryer = mysqlRunner{}
+		}
+		return mysqlNativeBackupFull(ctx, target, w, queryer)
 	}
 	database := databaseName(target)
 	args := append(mysqlDumpArgs(target), database)
@@ -73,21 +89,89 @@ func (d *Driver) BackupFull(ctx context.Context, target drivers.Target, w driver
 	return drivers.ResumePoint{Driver: d.Name(), Position: "mysqldump:single-transaction"}, nil
 }
 
-// BackupIncremental is not supported by mysqldump logical backups.
-func (d *Driver) BackupIncremental(context.Context, drivers.Target, manifest.Manifest, drivers.RecordWriter) (drivers.ResumePoint, error) {
-	return drivers.ResumePoint{}, drivers.ErrIncrementalUnsupported
+// BackupIncremental captures binlog position for incremental backup.
+func (d *Driver) BackupIncremental(ctx context.Context, target drivers.Target, parent manifest.Manifest, w drivers.RecordWriter) (drivers.ResumePoint, error) {
+	if !useNativeProtocol(target) {
+		return drivers.ResumePoint{}, drivers.ErrIncrementalUnsupported
+	}
+	if w == nil {
+		return drivers.ResumePoint{}, fmt.Errorf("record writer is required")
+	}
+	queryer := d.native
+	if queryer == nil {
+		queryer = mysqlRunner{}
+	}
+
+	file, pos, err := queryer.GetMasterStatus(ctx, target)
+	if err != nil {
+		return drivers.ResumePoint{}, err
+	}
+
+	position := fmt.Sprintf("mysql:binlog:%s:%s", file, pos)
+	return drivers.ResumePoint{
+		Driver:   d.Name(),
+		Position: position,
+		Metadata: map[string]string{
+			"binlog_file": file,
+			"binlog_pos":   pos,
+		},
+	}, nil
 }
 
-// Stream is reserved for binlog streaming.
-func (d *Driver) Stream(ctx context.Context, _ drivers.Target, _ drivers.ResumePoint, _ drivers.StreamWriter) error {
-	<-ctx.Done()
-	return ctx.Err()
+// Stream streams binlog events for PITR.
+func (d *Driver) Stream(ctx context.Context, target drivers.Target, rp drivers.ResumePoint, w drivers.StreamWriter) error {
+	if !useNativeProtocol(target) {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	if w == nil {
+		return fmt.Errorf("stream writer is required")
+	}
+	queryer := d.native
+	if queryer == nil {
+		queryer = mysqlRunner{}
+	}
+
+	var position string
+	if rp.Metadata != nil {
+		position = rp.Metadata["binlog_file"]
+	}
+
+	events, err := queryer.GetBinlogEvents(ctx, target, position)
+	if err != nil {
+		return err
+	}
+
+	for _, event := range events {
+		record := drivers.StreamRecord{
+			ResumePoint: drivers.ResumePoint{
+				Driver:   d.Name(),
+				Position: fmt.Sprintf("%s:%d", event.LogName, event.Pos),
+				Metadata: map[string]string{
+					"binlog_file": event.LogName,
+					"binlog_pos":  fmt.Sprintf("%d", event.Pos),
+				},
+			},
+			Payload: event.Data,
+		}
+		if err := w.WriteStream(record); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Restore applies SQL records through mysql.
 func (d *Driver) Restore(ctx context.Context, target drivers.Target, r drivers.RecordReader, opts drivers.RestoreOptions) error {
 	if r == nil {
 		return fmt.Errorf("record reader is required")
+	}
+	if useNativeProtocol(target) {
+		queryer := d.native
+		if queryer == nil {
+			queryer = mysqlRunner{}
+		}
+		return mysqlNativeRestore(ctx, target, r, opts, queryer)
 	}
 	for {
 		record, err := r.NextRecord()
@@ -112,9 +196,48 @@ func (d *Driver) Restore(ctx context.Context, target drivers.Target, r drivers.R
 	}
 }
 
-// ReplayStream is reserved for binlog replay.
-func (d *Driver) ReplayStream(context.Context, drivers.Target, drivers.StreamReader, drivers.ReplayTarget) error {
-	return drivers.ErrIncrementalUnsupported
+// ReplayStream replays binlog events for PITR restore.
+func (d *Driver) ReplayStream(ctx context.Context, target drivers.Target, r drivers.StreamReader, targetPoint drivers.ReplayTarget) error {
+	if !useNativeProtocol(target) {
+		return drivers.ErrIncrementalUnsupported
+	}
+	if r == nil {
+		return fmt.Errorf("stream reader is required")
+	}
+	queryer := d.native
+	if queryer == nil {
+		queryer = mysqlRunner{}
+	}
+
+	for {
+		record, err := r.NextStream()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		// Check if we've reached the target replay point
+		if targetPoint.Position != "" {
+			if record.ResumePoint.Position >= targetPoint.Position {
+				return nil
+			}
+		}
+		if !targetPoint.Time.IsZero() && !record.ResumePoint.Time.IsZero() {
+			if record.ResumePoint.Time.After(targetPoint.Time) {
+				return nil
+			}
+		}
+
+		// Execute the binlog data as SQL
+		if len(record.Payload) > 0 {
+			_, err := queryer.SimpleQuery(ctx, target, string(record.Payload))
+			if err != nil {
+				return err
+			}
+		}
+	}
 }
 
 func (d *Driver) run(ctx context.Context, name string, args []string, stdin []byte, env []string) ([]byte, error) {
@@ -241,4 +364,21 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func useNativeProtocol(target drivers.Target) bool {
+	value := strings.ToLower(strings.TrimSpace(firstNonEmpty(
+		target.Connection["protocol"],
+		target.Connection["native_protocol"],
+		target.Connection["native"],
+		target.Options["protocol"],
+		target.Options["native_protocol"],
+		target.Options["native"],
+	)))
+	switch value {
+	case "mysqldump", "shell", "external":
+		return false
+	default:
+		return true
+	}
 }

@@ -84,7 +84,7 @@ func TestDriverNameVersionTestAndUnsupportedIncremental(t *testing.T) {
 	if err := driver.Test(context.Background(), drivers.Target{Name: "redis"}); err != nil {
 		t.Fatalf("Test() error = %v", err)
 	}
-	if _, err := driver.BackupIncremental(context.Background(), drivers.Target{}, manifest.Manifest{}, nil); !errors.Is(err, drivers.ErrIncrementalUnsupported) {
+	if _, err := driver.BackupIncremental(context.Background(), drivers.Target{Options: map[string]string{"protocol": "scan+dump"}}, manifest.Manifest{}, nil); !errors.Is(err, drivers.ErrIncrementalUnsupported) {
 		t.Fatalf("BackupIncremental() error = %v", err)
 	}
 }

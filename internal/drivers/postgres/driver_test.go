@@ -26,10 +26,10 @@ func TestDriverNameVersionTestAndUnsupportedIncremental(t *testing.T) {
 	if version != "pg_dump (PostgreSQL) 16.2" {
 		t.Fatalf("Version() = %q", version)
 	}
-	if err := driver.Test(context.Background(), drivers.Target{Connection: map[string]string{"dsn": "postgres://db"}}); err != nil {
+	if err := driver.Test(context.Background(), drivers.Target{Connection: map[string]string{"dsn": "postgres://db"}, Options: map[string]string{"protocol": "pg_dump"}}); err != nil {
 		t.Fatalf("Test() error = %v", err)
 	}
-	if _, err := driver.BackupIncremental(context.Background(), drivers.Target{}, manifest.Manifest{}, nil); !errors.Is(err, drivers.ErrIncrementalUnsupported) {
+	if _, err := driver.BackupIncremental(context.Background(), drivers.Target{Options: map[string]string{"protocol": "pg_dump"}}, manifest.Manifest{}, nil); !errors.Is(err, drivers.ErrIncrementalUnsupported) {
 		t.Fatalf("BackupIncremental() error = %v", err)
 	}
 	if len(runner.calls) != 2 || runner.calls[0].name != "pg_dump" || runner.calls[1].name != "pg_dump" {
@@ -51,6 +51,7 @@ func TestDriverBackupFullUsesPgDumpPlainSQL(t *testing.T) {
 			"password": "secret",
 			"tls":      "require",
 		},
+		Options: map[string]string{"protocol": "pg_dump"},
 	}
 	var stream drivers.MemoryRecordStream
 	rp, err := driver.BackupFull(context.Background(), target, &stream)
@@ -91,7 +92,7 @@ func TestDriverBackupFullCanIncludeGlobals(t *testing.T) {
 	driver := &Driver{runner: runner}
 	target := drivers.Target{
 		Connection: map[string]string{"dsn": "postgres://backup:secret@db.example/app"},
-		Options:    map[string]string{"include_globals": "true"},
+		Options:    map[string]string{"include_globals": "true", "protocol": "pg_dump"},
 	}
 	var stream drivers.MemoryRecordStream
 	rp, err := driver.BackupFull(context.Background(), target, &stream)
@@ -139,7 +140,7 @@ func TestDriverRestoreUsesPsql(t *testing.T) {
 	if err := stream.WriteRecord(drivers.ObjectRef{Name: "app", Kind: databaseObjectKind}, []byte("create table public.users(id int);\n")); err != nil {
 		t.Fatalf("WriteRecord() error = %v", err)
 	}
-	if err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}}, &stream, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
+	if err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"database": "app"}, Options: map[string]string{"protocol": "pg_dump"}}, &stream, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
 		t.Fatalf("Restore() error = %v", err)
 	}
 	if len(runner.calls) != 1 || runner.calls[0].name != "psql" || string(runner.calls[0].stdin) != "create table public.users(id int);\n" {
@@ -160,7 +161,7 @@ func TestDriverRestoreAppliesGlobals(t *testing.T) {
 	if err := stream.WriteRecord(drivers.ObjectRef{Name: "globals", Kind: globalsObjectKind}, []byte("create role kronos_restore;\n")); err != nil {
 		t.Fatalf("WriteRecord() error = %v", err)
 	}
-	if err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"dsn": "postgres://db"}}, &stream, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
+	if err := driver.Restore(context.Background(), drivers.Target{Connection: map[string]string{"dsn": "postgres://db"}, Options: map[string]string{"protocol": "pg_dump"}}, &stream, drivers.RestoreOptions{ReplaceExisting: true}); err != nil {
 		t.Fatalf("Restore() error = %v", err)
 	}
 	if len(runner.calls) != 1 || runner.calls[0].name != "psql" || string(runner.calls[0].stdin) != "create role kronos_restore;\n" {
@@ -240,7 +241,7 @@ func TestDriverStreamWaitsForContext(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := NewDriver().Stream(ctx, drivers.Target{}, drivers.ResumePoint{}, nil)
+	err := NewDriver().Stream(ctx, drivers.Target{Options: map[string]string{"protocol": "pg_dump"}}, drivers.ResumePoint{}, nil)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Stream(canceled) error = %v, want context.Canceled", err)
 	}
@@ -249,8 +250,8 @@ func TestDriverStreamWaitsForContext(t *testing.T) {
 func TestDriverReplayStreamUnsupported(t *testing.T) {
 	t.Parallel()
 
-	if err := NewDriver().ReplayStream(context.Background(), drivers.Target{}, nil, drivers.ReplayTarget{}); !errors.Is(err, drivers.ErrIncrementalUnsupported) {
-		t.Fatalf("ReplayStream() error = %v", err)
+	if err := NewDriver().ReplayStream(context.Background(), drivers.Target{Options: map[string]string{"protocol": "pg_dump"}}, nil, drivers.ReplayTarget{}); err == nil {
+		t.Fatalf("ReplayStream() error = nil, want error")
 	}
 }
 

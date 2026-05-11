@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -595,6 +596,23 @@ func pgNativeReadTable(ctx context.Context, target drivers.Target, queryer pgNat
 		}
 		return make([][]*string, count), nil
 	}
+
+	// Try COPY binary first for bulk data transfer (faster for large tables)
+	if copier, ok := queryer.(interface {
+		CopyBinaryOut(ctx context.Context, target drivers.Target, table string) (io.ReadCloser, error)
+	}); ok {
+		fullTable := quotePGQualifiedName(table.Schema, table.Name)
+		reader, err := copier.CopyBinaryOut(ctx, target, fullTable)
+		if err == nil {
+			defer reader.Close()
+			rows, err := pgReadBinaryCopy(reader, columns)
+			if err == nil && len(rows) > 0 {
+				return rows, nil
+			}
+		}
+		// Fall through to SELECT if COPY failed or returned no rows
+	}
+
 	names := make([]string, 0, len(columns))
 	for _, column := range columns {
 		names = append(names, quotePGIdentifier(column.Name))
@@ -605,6 +623,98 @@ func pgNativeReadTable(ctx context.Context, target drivers.Target, queryer pgNat
 		return nil, err
 	}
 	return result.Rows, nil
+}
+
+func pgReadBinaryCopy(r io.Reader, columns []pgNativeColumn) ([][]*string, error) {
+	// PostgreSQL COPY BINARY format:
+	// 16-bit big-endian column count
+	// For each row:
+	//   16-bit big-endian null bitmap size (in bytes) = (ncolumns + 7) / 8
+	//   null bitmap (1 = NULL)
+	//   For each column (if not NULL):
+	//     32-bit big-endian value length
+	//     value bytes
+	// trailer: 16-bit -1 to mark end
+
+	br := &binReader{s: r}
+	colCount, err := br.ReadInt16()
+	if err != nil {
+		return nil, fmt.Errorf("COPY BINARY: read column count: %w", err)
+	}
+	if int(colCount) != len(columns) {
+		return nil, fmt.Errorf("COPY BINARY: expected %d columns, got %d", len(columns), colCount)
+	}
+
+	var rows [][]*string
+	for {
+		rowLen, err := br.ReadInt16()
+		if err != nil {
+			return nil, fmt.Errorf("COPY BINARY: read row length: %w", err)
+		}
+		if rowLen == -1 {
+			break
+		}
+		nullBitmapLen := int(colCount + 7) / 8
+		nullBitmap := make([]byte, nullBitmapLen)
+		if _, err := io.ReadFull(br.s, nullBitmap); err != nil {
+			return nil, fmt.Errorf("COPY BINARY: read null bitmap: %w", err)
+		}
+
+		row := make([]*string, 0, colCount)
+		for i := int16(0); i < colCount; i++ {
+			if (nullBitmap[i/8] & (0x80 >> (i % 8))) != 0 {
+				row = append(row, nil)
+				continue
+			}
+			valLen, err := br.ReadInt32()
+			if err != nil {
+				return nil, fmt.Errorf("COPY BINARY: read value length: %w", err)
+			}
+			if valLen == -1 {
+				row = append(row, nil)
+				continue
+			}
+			if valLen < 0 || int64(valLen) > 1<<30 {
+				return nil, fmt.Errorf("COPY BINARY: invalid value length %d", valLen)
+			}
+			data := make([]byte, valLen)
+			if _, err := io.ReadFull(br.s, data); err != nil {
+				return nil, fmt.Errorf("COPY BINARY: read value: %w", err)
+			}
+			s := string(data)
+			row = append(row, &s)
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}
+
+type binReader struct {
+	s io.Reader
+}
+
+func (b *binReader) ReadByte() (byte, error) {
+	var buf [1]byte
+	if _, err := io.ReadFull(b.s, buf[:]); err != nil {
+		return 0, err
+	}
+	return buf[0], nil
+}
+
+func (b *binReader) ReadInt16() (int16, error) {
+	var buf [2]byte
+	if _, err := io.ReadFull(b.s, buf[:]); err != nil {
+		return 0, err
+	}
+	return int16(buf[0])<<8 | int16(buf[1]), nil
+}
+
+func (b *binReader) ReadInt32() (int32, error) {
+	var buf [4]byte
+	if _, err := io.ReadFull(b.s, buf[:]); err != nil {
+		return 0, err
+	}
+	return int32(buf[0])<<24 | int32(buf[1])<<16 | int32(buf[2])<<8 | int32(buf[3]), nil
 }
 
 func writeNativeExtensionDefinition(w *bytes.Buffer, extension pgNativeExtension) {

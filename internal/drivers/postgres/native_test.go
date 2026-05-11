@@ -333,6 +333,24 @@ func (q *fakePGNativeQueryer) SimpleQuery(_ context.Context, _ drivers.Target, q
 	return result, nil
 }
 
+func (q *fakePGNativeQueryer) CopyBinaryOut(_ context.Context, _ drivers.Target, _ string) (io.ReadCloser, error) {
+	return &fakeCopyReader{}, nil
+}
+
+func (q *fakePGNativeQueryer) GetCurrentLSN(_ context.Context, _ drivers.Target) (string, error) {
+	return "0/FFFFFF", nil
+}
+
+type fakeCopyReader struct{}
+
+func (r *fakeCopyReader) Read(p []byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (r *fakeCopyReader) Close() error {
+	return nil
+}
+
 func pgTestResult(fields []string, rows [][]*string) pgQueryResult {
 	result := pgQueryResult{Rows: rows}
 	for _, field := range fields {

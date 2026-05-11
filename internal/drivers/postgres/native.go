@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"strings"
@@ -29,12 +30,81 @@ type pgNativeDialer func(ctx context.Context, network string, address string) (n
 
 type pgNativeQueryer interface {
 	SimpleQuery(ctx context.Context, target drivers.Target, query string) (pgQueryResult, error)
+	CopyBinaryOut(ctx context.Context, target drivers.Target, table string) (io.ReadCloser, error)
+	GetCurrentLSN(ctx context.Context, target drivers.Target) (string, error)
 }
 
 type pgNativeRunner struct{}
 
 func (pgNativeRunner) SimpleQuery(ctx context.Context, target drivers.Target, query string) (pgQueryResult, error) {
 	return pgNativeSimpleQuery(ctx, target, query)
+}
+
+func (pgNativeRunner) CopyBinaryOut(ctx context.Context, target drivers.Target, table string) (io.ReadCloser, error) {
+	cfg, err := pgNativeConfigFromTarget(target)
+	if err != nil {
+		return nil, err
+	}
+	return pgNativeCopyBinaryOut(ctx, cfg, table, defaultPGNativeDialer)
+}
+
+func (pgNativeRunner) GetCurrentLSN(ctx context.Context, target drivers.Target) (string, error) {
+	cfg, err := pgNativeConfigFromTarget(target)
+	if err != nil {
+		return "", err
+	}
+	return pgNativeGetCurrentLSN(ctx, cfg, defaultPGNativeDialer)
+}
+
+func pgNativeGetCurrentLSN(ctx context.Context, cfg pgNativeConfig, dial pgNativeDialer) (string, error) {
+	conn, err := dial(ctx, "tcp", cfg.Address)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	params := map[string]string{
+		"user":     cfg.Username,
+		"database": cfg.Database,
+	}
+	if cfg.ApplicationName != "" {
+		params["application_name"] = cfg.ApplicationName
+	}
+	result, err := pgSimpleQuery(conn, params, cfg.Password, "SELECT pg_current_wal_lsn()")
+	if err != nil {
+		return "", err
+	}
+	if len(result.Rows) == 0 || len(result.Rows[0]) == 0 || result.Rows[0][0] == nil {
+		return "", fmt.Errorf("pg_current_wal_lsn() returned no result")
+	}
+	return *result.Rows[0][0], nil
+}
+
+func pgNativeCopyBinaryOut(ctx context.Context, cfg pgNativeConfig, table string, dial pgNativeDialer) (io.ReadCloser, error) {
+	conn, err := dial(ctx, "tcp", cfg.Address)
+	if err != nil {
+		return nil, err
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+	if pgSSLModeUsesTLS(cfg.SSLMode) {
+		tlsConn, err := startPGNativeTLS(ctx, conn, cfg)
+		if err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+		conn = tlsConn
+	}
+
+	params := map[string]string{
+		"user":     cfg.Username,
+		"database": cfg.Database,
+	}
+	if cfg.ApplicationName != "" {
+		params["application_name"] = cfg.ApplicationName
+	}
+	return pgCopyBinaryOut(conn, params, cfg.Password, table)
 }
 
 func pgNativeSimpleQuery(ctx context.Context, target drivers.Target, query string) (pgQueryResult, error) {

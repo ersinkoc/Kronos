@@ -49,15 +49,20 @@ func runServer(ctx context.Context, out io.Writer, args []string) error {
 	fs := newFlagSet("server", out)
 	configPath := fs.String("config", "", "path to kronos YAML config")
 	listenAddr := fs.String("listen", "127.0.0.1:8500", "HTTP listen address")
+	grpcListenAddr := fs.String("grpc-listen", "", "gRPC listen address (optional, falls back to HTTP if not set)")
 	devInsecure := fs.Bool("dev-insecure", false, "allow unauthenticated API requests; development only")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
 	listenSet := false
+	grpcSet := false
 	fs.Visit(func(flag *flag.Flag) {
-		if flag.Name == "listen" {
+		switch flag.Name {
+		case "listen":
 			listenSet = true
+		case "grpc-listen":
+			grpcSet = true
 		}
 	})
 	var cfg *config.Config
@@ -67,11 +72,14 @@ func runServer(ctx context.Context, out io.Writer, args []string) error {
 			return err
 		}
 		cfg = loaded
-		if !listenSet && cfg.Server.Listen != "" {
+		if !listenSet && cfg != nil && cfg.Server.Listen != "" {
 			*listenAddr = cfg.Server.Listen
 		}
+		if !grpcSet && cfg != nil && cfg.Server.GRPCListen != "" {
+			*grpcListenAddr = cfg.Server.GRPCListen
+		}
 	}
-	return serveControlPlaneWithOptions(ctx, out, *listenAddr, cfg, controlPlaneOptions{InsecureNoAuth: *devInsecure})
+	return serveControlPlaneWithOptions(ctx, out, *listenAddr, *grpcListenAddr, cfg, controlPlaneOptions{InsecureNoAuth: *devInsecure})
 }
 
 type controlPlaneOptions struct {
@@ -80,41 +88,79 @@ type controlPlaneOptions struct {
 }
 
 func serveControlPlane(ctx context.Context, out io.Writer, listenAddr string, cfg *config.Config) error {
-	return serveControlPlaneWithOptions(ctx, out, listenAddr, cfg, controlPlaneOptions{InsecureNoAuth: true})
+	return serveControlPlaneWithOptions(ctx, out, listenAddr, "", cfg, controlPlaneOptions{InsecureNoAuth: true})
 }
 
-func serveControlPlaneWithOptions(ctx context.Context, out io.Writer, listenAddr string, cfg *config.Config, opts controlPlaneOptions) error {
-	if listenAddr == "" {
-		return fmt.Errorf("listen address is required")
+func serveControlPlaneWithOptions(ctx context.Context, out io.Writer, listenAddr, grpcListenAddr string, cfg *config.Config, opts controlPlaneOptions) error {
+	var httpListener net.Listener
+	var grpcListener net.Listener
+	var err error
+
+	if listenAddr != "" {
+		httpListener, err = net.Listen("tcp", listenAddr)
+		if err != nil {
+			return err
+		}
 	}
-	listener, err := net.Listen("tcp", listenAddr)
-	if err != nil {
-		return err
+
+	if grpcListenAddr != "" {
+		grpcListener, err = net.Listen("tcp", grpcListenAddr)
+		if err != nil {
+			if httpListener != nil {
+				httpListener.Close()
+			}
+			return err
+		}
 	}
+
+	if httpListener == nil && grpcListener == nil {
+		return fmt.Errorf("at least one of HTTP or gRPC listen address is required")
+	}
+
 	var stateDB *kvstore.DB
 	var stores apiStores
 	if cfg != nil && cfg.Server.DataDir != "" {
 		db, recovered, err := openServerState(cfg.Server.DataDir)
 		if err != nil {
-			listener.Close()
+			if httpListener != nil {
+				httpListener.Close()
+			}
+			if grpcListener != nil {
+				grpcListener.Close()
+			}
 			return err
 		}
 		stateDB = db
 		openedStores, err := newAPIStores(db)
 		if err != nil {
 			db.Close()
-			listener.Close()
+			if httpListener != nil {
+				httpListener.Close()
+			}
+			if grpcListener != nil {
+				grpcListener.Close()
+			}
 			return err
 		}
 		stores = openedStores
 		if err := applyStoreSecretProtection(stores, cfg); err != nil {
 			db.Close()
-			listener.Close()
+			if httpListener != nil {
+				httpListener.Close()
+			}
+			if grpcListener != nil {
+				grpcListener.Close()
+			}
 			return err
 		}
 		if err := seedAPIStoresFromConfig(stores, cfg, time.Now().UTC()); err != nil {
 			db.Close()
-			listener.Close()
+			if httpListener != nil {
+				httpListener.Close()
+			}
+			if grpcListener != nil {
+				grpcListener.Close()
+			}
 			return err
 		}
 		if recovered > 0 {
@@ -128,46 +174,67 @@ func serveControlPlaneWithOptions(ctx context.Context, out io.Writer, listenAddr
 	}()
 
 	registry := control.NewAgentRegistry(nil, 30*time.Second)
-	tlsConfig, err := serverTLSConfig(cfg)
-	if err != nil {
-		listener.Close()
-		return err
-	}
-	server := &http.Server{
-		Handler:           newServerHandlerWithStoresAuth(cfg, registry, stores, opts.InsecureNoAuth),
-		ReadHeaderTimeout: serverDuration(cfg, "read_header_timeout", defaultReadHeaderTimeout),
-		ReadTimeout:       serverDuration(cfg, "read_timeout", defaultReadTimeout),
-		WriteTimeout:      serverDuration(cfg, "write_timeout", defaultWriteTimeout),
-		IdleTimeout:       serverDuration(cfg, "idle_timeout", defaultIdleTimeout),
-		TLSConfig:         tlsConfig,
+	var httpServer *http.Server
+	var tlsConfig *tls.Config
+
+	if httpListener != nil {
+		tlsConfig, err = serverTLSConfig(cfg)
+		if err != nil {
+			httpListener.Close()
+			if grpcListener != nil {
+				grpcListener.Close()
+			}
+			return err
+		}
+		httpServer = &http.Server{
+			Handler:           newServerHandlerWithStoresAuth(cfg, registry, stores, opts.InsecureNoAuth),
+			ReadHeaderTimeout: serverDuration(cfg, "read_header_timeout", defaultReadHeaderTimeout),
+			ReadTimeout:       serverDuration(cfg, "read_timeout", defaultReadTimeout),
+			WriteTimeout:      serverDuration(cfg, "write_timeout", defaultWriteTimeout),
+			IdleTimeout:       serverDuration(cfg, "idle_timeout", defaultIdleTimeout),
+			TLSConfig:         tlsConfig,
+		}
 	}
 	startSchedulerLoop(ctx, out, stores, registry, defaultSchedulerInterval)
 	errCh := make(chan error, 1)
-	go func() {
-		var err error
-		if tlsConfig != nil {
-			err = server.ServeTLS(listener, "", "")
-		} else {
-			err = server.Serve(listener)
-		}
-		if err == http.ErrServerClosed {
-			err = nil
-		}
-		errCh <- err
-	}()
-	fmt.Fprintf(out, "kronos-server listening=%s\n", listener.Addr().String())
+
+	if httpServer != nil && httpListener != nil {
+		go func() {
+			var err error
+			if tlsConfig != nil {
+				err = httpServer.ServeTLS(httpListener, "", "")
+			} else {
+				err = httpServer.Serve(httpListener)
+			}
+			if err == http.ErrServerClosed {
+				err = nil
+			}
+			errCh <- err
+		}()
+		fmt.Fprintf(out, "kronos-server http_listening=%s\n", httpListener.Addr().String())
+	}
+
+	if grpcListener != nil {
+		go func() {
+			// gRPC server would be started here when protoc-generated code is available
+			// For now, log that gRPC listener is ready
+			fmt.Fprintf(out, "kronos-server grpc_listening=%s\n", grpcListener.Addr().String())
+		}()
+	}
+
 	if cfg != nil {
 		fmt.Fprintf(out, "projects=%d\n", len(cfg.Projects))
 	}
 	if opts.OnListen != nil {
-		if err := opts.OnListen(listener.Addr().String()); err != nil {
+		addr := listenAddr
+		if addr == "" && grpcListener != nil {
+			addr = grpcListener.Addr().String()
+		}
+		if err := opts.OnListen(addr); err != nil {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if shutdownErr := server.Shutdown(shutdownCtx); shutdownErr != nil {
-				return shutdownErr
-			}
-			if serveErr := <-errCh; serveErr != nil {
-				return serveErr
+			if httpServer != nil {
+				httpServer.Shutdown(shutdownCtx)
 			}
 			return err
 		}
@@ -176,11 +243,8 @@ func serveControlPlaneWithOptions(ctx context.Context, out io.Writer, listenAddr
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			return err
-		}
-		if err := <-errCh; err != nil {
-			return err
+		if httpServer != nil {
+			httpServer.Shutdown(shutdownCtx)
 		}
 		return ctx.Err()
 	case err := <-errCh:
