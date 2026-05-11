@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package agent.v1;
+
+option go_package = "github.com/kronos/kronos/api/agent/v1";
+
+service AgentService {
+  // Bidirectional streaming for job dispatch and result reporting
+  rpc Connect(stream AgentMessage) returns (stream AgentMessage);
+
+  // Unary methods for one-off operations
+  rpc Heartbeat(AgentHeartbeatRequest) returns (AgentHeartbeatResponse);
+  rpc ClaimJob(ClaimJobRequest) returns (ClaimJobResponse);
+  rpc FinishJob(FinishJobRequest) returns (FinishJobResponse);
+  rpc ListTargets(ListTargetsRequest) returns (ListTargetsResponse);
+  rpc ListStorages(ListStoragesRequest) returns (ListStoragesResponse);
+  rpc ListBackups(ListBackupsRequest) returns (ListBackupsResponse);
+}
+
+// AgentMessage is the envelope for bidirectional streaming.
+message AgentMessage {
+  string request_id = 1;
+  oneof payload {
+    HeartbeatPayload heartbeat = 2;
+    JobClaimPayload job_claim = 3;
+    JobResultPayload job_result = 4;
+    JobRequestPayload job_request = 5;
+    ErrorPayload error = 6;
+  }
+}
+
+message HeartbeatPayload {
+  string agent_id = 1;
+  string version = 2;
+  string address = 3;
+  int32 capacity = 4;
+  map<string, string> labels = 5;
+  int64 timestamp = 6;
+}
+
+message JobClaimPayload {
+  string agent_id = 1;
+  int64 timestamp = 2;
+}
+
+message JobResultPayload {
+  string request_id = 1;
+  string job_id = 2;
+  string status = 3;
+  string error_message = 4;
+  bytes result_payload = 5;
+  int64 timestamp = 6;
+}
+
+message JobRequestPayload {
+  string request_id = 1;
+  string job_id = 2;
+  string job_type = 3;
+  string target_id = 4;
+  string storage_id = 5;
+  map<string, string> options = 6;
+}
+
+message ErrorPayload {
+  string request_id = 1;
+  string code = 2;
+  string message = 3;
+}
+
+message AgentHeartbeatRequest {
+  HeartbeatPayload heartbeat = 1;
+}
+
+message AgentHeartbeatResponse {
+  bool accepted = 1;
+  int64 server_time = 2;
+}
+
+message ClaimJobRequest {
+  string agent_id = 1;
+}
+
+message ClaimJobResponse {
+  bool claimed = 1;
+  JobRequestPayload job = 2;
+}
+
+message FinishJobRequest {
+  string job_id = 1;
+  string status = 2;
+  string error_message = 3;
+  bytes result_payload = 4;
+}
+
+message FinishJobResponse {
+  bool accepted = 1;
+}
+
+message ListTargetsRequest {
+  string agent_id = 1;
+  bool include_secrets = 2;
+}
+
+message ListTargetsResponse {
+  repeated Target targets = 1;
+}
+
+message Target {
+  string id = 1;
+  string name = 2;
+  string driver = 3;
+  map<string, string> connection = 4;
+  map<string, string> options = 5;
+}
+
+message ListStoragesRequest {
+  string agent_id = 1;
+  bool include_secrets = 2;
+}
+
+message ListStoragesResponse {
+  repeated Storage storages = 1;
+}
+
+message Storage {
+  string id = 1;
+  string name = 2;
+  string backend = 3;
+  map<string, string> config = 4;
+}
+
+message ListBackupsRequest {
+  string agent_id = 1;
+}
+
+message ListBackupsResponse {
+  repeated Backup backups = 1;
+}
+
+message Backup {
+  string id = 1;
+  string target_id = 2;
+  string storage_id = 3;
+  int64 created_at = 4;
+}
